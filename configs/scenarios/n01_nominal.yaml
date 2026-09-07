@@ -1,0 +1,30 @@
+# N01 — nominal standard grasp (taxonomy §1). Baseline: no anomaly injected.
+scenario_id: N01
+family: N
+seed: 1
+task_text: "Pick up the Crew Lock Bag with both arms and place it in the green target ring."
+control_hz: 30.0
+
+object_x: 0.40
+object_y: 0.00
+object_z: 1.00
+object_roll: 0.0
+object_pitch: 0.0
+object_yaw: 0.0
+
+left_start_pose: null
+right_start_pose: null
+
+left_grasp_offset: [0.0, 0.0, 0.0]
+right_grasp_offset: [0.0, 0.0, 0.0]
+left_approach_angle: 0.0
+right_approach_angle: 0.0
+pregrasp_distance: 0.15
+
+lift_direction: [0.0, 0.0, 1.0]
+lift_height: 0.15
+hold_duration_s: 1.0
+
+target_ring_pose: [0.55, 0.35, 1.00]
+
+anomaly: null
