@@ -18,7 +18,7 @@ from typing import Any
 import yaml
 
 DEFAULT_TASK_TEXT = (
-    "Pick up the Crew Lock Bag with both arms and place it in the green target ring."
+    "Grasp the object with both hands, lift it, hold it steadily, and place it down."
 )
 
 # 16D joint order, frozen by docs/dataset_spec_v0.1.md — verified against
@@ -88,8 +88,22 @@ class ScenarioConfig:
     lift_height: float = 0.15
     hold_duration_s: float = 1.0
 
-    # TRA-01: episode must end by placing into the green target ring
-    target_ring_pose: tuple[float, float, float] = (0.55, 0.35, 1.00)
+    # N08/P24 axis: how far the two arms' phase transitions drift apart.
+    # Field names match sim's own scenario schema (reference/scenario_t03.json,
+    # metadata.json) rather than inventing a parallel convention.
+    # coordination_mode: "synchronous" | "left_leads" | "right_leads"
+    coordination_mode: str = "synchronous"
+    # phase_offset: seconds the lagging arm's phase transitions are delayed
+    # by when coordination_mode != "synchronous". 0.0 under "synchronous".
+    phase_offset: float = 0.0
+
+    # Where the object should end up after PLACE/RELEASE. Originally framed
+    # as "the green target ring" in TRA-01's task text; that ring does not
+    # exist in the scene (confirmed against a full prim scan — nothing named
+    # ring/target_ring), so this is just a coordinate + radius/z-tolerance
+    # proximity check (see IsaacLabR1Adapter._inside_target), not a literal
+    # marked target. See docs/scene_grounding_t03.md.
+    place_target_pose: tuple[float, float, float] = (-2.633, 3.506, 1.429)
 
     anomaly: AnomalyConfig | None = None
     # F02 only: a second, distinct anomaly that fires while already

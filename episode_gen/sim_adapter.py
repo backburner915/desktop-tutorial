@@ -651,7 +651,7 @@ class IsaacLabR1Adapter(SimAdapter):
                     flush=True,
                 )
             self._set_root_pose(
-                "target_ring", self._target_ring, tuple(scenario.target_ring_pose),
+                "target_ring", self._target_ring, tuple(scenario.place_target_pose),
                 self._quat_from_rpy(0.0, 0.0, 0.0),
             )
         self._write_joint_state(self._commanded_qpos)
@@ -1170,7 +1170,7 @@ class IsaacLabR1Adapter(SimAdapter):
         object_pos = self._read_object_pose(scenario)
         center = self._object_bbox_center(object_pos)
         lift = self._unit(tuple(float(value) for value in scenario.lift_direction))
-        ring = tuple(float(value) for value in scenario.target_ring_pose)
+        ring = tuple(float(value) for value in scenario.place_target_pose)
         targets: dict[str, tuple[float, float, float]] = {}
         for arm, offset in (("left", scenario.left_grasp_offset), ("right", scenario.right_grasp_offset)):
             grasp = tuple(center[index] + float(offset[index]) for index in range(3))
@@ -1446,7 +1446,7 @@ class IsaacLabR1Adapter(SimAdapter):
     def _inside_target(self, object_pos: tuple[float, float, float], scenario: ScenarioConfig) -> bool:
         import math
 
-        ring = tuple(float(value) for value in scenario.target_ring_pose)
+        ring = tuple(float(value) for value in scenario.place_target_pose)
         radial = math.sqrt((object_pos[0] - ring[0]) ** 2 + (object_pos[1] - ring[1]) ** 2)
         tolerance = self._first(self._lookup(self.env, ("target_z_tolerance",)), 0.08)
         return radial <= self._target_radius() and abs(object_pos[2] - ring[2]) <= float(tolerance)

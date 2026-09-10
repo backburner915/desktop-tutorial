@@ -7,7 +7,7 @@
 scenario_id: R11
 family: R
 seed: 1101
-task_text: "Pick up the Crew Lock Bag with both arms and place it in the green target ring."
+task_text: "Grasp the object with both hands, lift it, hold it steadily, and place it down."
 control_hz: 30.0
 
 object_x: -2.65    # T03 bbox center, see docs/scene_grounding_t03.md
@@ -30,7 +30,7 @@ lift_direction: [0.0, 0.0, 1.0]
 lift_height: 0.12        # matches reference/scenario_t03.json lift_vector
 hold_duration_s: 0.3   # shortened for fast batch iteration; TRA-01 success window is separate (§6)
 
-target_ring_pose: [-2.633, 3.506, 1.429]  # NOT a verified ring - real "place" coord from a tested episode, see docs/scene_grounding_t03.md
+place_target_pose: [-2.633, 3.506, 1.429]  # NOT a verified ring - real "place" coord from a tested episode, see docs/scene_grounding_t03.md
 
 anomaly:
   scenario_class: R11

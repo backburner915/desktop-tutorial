@@ -1,7 +1,8 @@
 # Scenario Taxonomy V0.1
 
 状态：草案，待确认后冻结为 V1.0。
-适用对象：Galaxea R1 双臂（带底盘）机器人，单物体双臂协同抓取任务（Crew Lock Bag → 绿色目标环）。
+适用对象：Galaxea R1 双臂（带底盘）机器人，单物体双臂协同抓取任务（抓取 → 抬升 → 稳定
+保持 → 放置到指定位置附近 → 松开；不要求放入环形标记物，见 `docs/dataset_spec_v0.1.md` §0）。
 
 ## 0. 设计原则
 
@@ -13,7 +14,7 @@
 
 所有分类共享同一份 [`episode_gen/fsm.py`](../episode_gen/fsm.py) 状态机与同一份 [Dataset Spec](./dataset_spec_v0.1.md)。新增一个 ID **不允许**新建脚本文件，只允许新增一份 `configs/scenarios/*.yaml` 和（如需要）在 `episode_gen/detectors.py` / `episode_gen/recovery.py` 里加一个 trigger/recovery 函数。
 
-FSM 阶段（完整版，含 TRA-01 要求的放置目标环）：
+FSM 阶段（完整版，MOVE_TO_TARGET/PLACE 指移动到 `place_target_pose` 附近放下，不是放入环形标记物）：
 
 ```
 RESET → PREGRASP → APPROACH → CONTACT_CHECK → GRASP → LIFT → HOLD
@@ -97,5 +98,10 @@ P21-P23 都用 `MockSimAdapter` 验证过：边界参数下 episode 应该正常
 
 - ~~R15-R19、F02、P21-P23：等 R11-R14 验收后再排期~~ 已完成（控制流层面，`MockSimAdapter` 验证过）。taxonomy 里定义的 N/R/F/P 四类，除 N02-N10（还没写对应 yaml，只有 N01）和 P24（缺少字段，见上）之外，已经全部有检测器/恢复逻辑 + config + 单测覆盖。
 - 障碍物/柜体等碰撞面的 taxonomy 扩展（R11 的"闭包"能力）依赖场景 USD 里实际有哪些可碰撞物体，待场景文件同步后补齐 `surface` 枚举。
-- **物体身份还未最终确认**：本文档和现有 `configs/scenarios/*.yaml` 里的"物体"仍然是 TRA-01 定义的 Crew Lock Bag 占位坐标；sim 端目前在真实 Isaac Sim 里用的是不带抓取点的占位正方体（T01/T03），坐标系也完全不同（详见 `docs/architecture.md` 的分支整合记录）。这批 R11-R19/P21-P23 的 config 在物体坐标、grasp offset 数值上都是占位值，等 sim 端场景对齐后需要重新核对是否需要调整数值——但检测器/恢复逻辑本身（判定的是相对量：距离阈值、力阈值、余量阈值）不需要跟着改。
+- **物体身份还未最终确认**：`configs/scenarios/*.yaml` 里的物体坐标已经换成了 sim 端真实
+  验证过的 T03 数值（见 `docs/scene_grounding_t03.md`），但 T01/T02/T03 本身还是不带明确
+  抓取特征的占位方块，不是最终要用的物体。检测器/恢复逻辑判定的是相对量（距离阈值、力阈值、
+  余量阈值），换物体不需要改代码，只需要换 config 里的坐标/尺寸。
+- **"放入目标环"要求已删除**：经确认场景里没有环形标记物，任务改为"抓取→抬升→稳定→放置到
+  指定位置附近→松开"，见 `docs/dataset_spec_v0.1.md` §0。
 - N02-N10：目前 taxonomy 里只有定义，还没有对应的 `configs/scenarios/*.yaml` 和采样范围（`batch_generate.py` 目前只给 R11 写了默认采样区间）。等物体坐标系确定后一起补，不然采样范围又是占位数字。

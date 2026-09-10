@@ -20,11 +20,14 @@ T03 场景坐标（见 `docs/scene_grounding_t03.md`）。现在卡住大批量�
 | 场景坐标 | ✅ 已用 sim 端真实数据（preflight报告+真实成功episode）校准，不再是占位值 |
 | N02-N10 具体配置 | ❌ 只有定义，没有 yaml——需要真实"可达工作空间范围"（不是单点坐标），现在只有一个点样本，还不够定采样区间 |
 | P24 | ❌ 缺字段，做不了（见 taxonomy 文档 §4） |
-| **"放入绿色目标环"这个环节** | ❌ **未验证，甚至可能不存在**——sim 端近100条通过的测试，成功判据是 `{grasp,lift,hold,place,release}`，`place` 指放回支撑架，场景扫描里也没有任何叫"ring"的物体。这跟 TRA-01 冻结的任务文本（"place it in the green target ring"）不一致，见 `docs/scene_grounding_t03.md` |
+| **"放入绿色目标环"要求** | ✅ **已按用户指示删除**——场景里确认没有环形标记物，任务改为
+  "抓取→抬升→稳定→放置到 `place_target_pose` 附近→松开"，`ScenarioConfig.place_target_pose`
+  取代 `target_ring_pose`，任务文本、成功判据、taxonomy 文档已同步（`dataset_spec_v0.1.md`
+  V0.2，见其 §0 偏离说明——这是本仓库内部适配，还需要回头找训练/VLA同学同步这个变化）|
 
-**现在唯一真正阻塞"正式宣布可以大批量生成"的，是最后一条**——不是代码没写完，是
-"目标环"这个东西在真实场景里可能根本不存在，需要人去确认（找 sim 同学问场景里到底有
-没有、或者去问 VLA/老师那边"放入目标环"这个要求是否还成立），不是我能在代码层面解决的。
+这一条已经不再阻塞了。现在真正卡住"大批量生成"的是下面这条：**N02-N10 的采样范围需要
+读取 USD 环境里的真实可达工作空间，这个我这边做不到，需要 sim 同学收集**——具体要收集
+什么，见 `docs/sim_data_request_v1.md`。
 可达工作空间来定，在场景坐标系确认前写了也是白写（这一点在 `docs/architecture.md`
 里也记录了：sim 端 preflight 报告里的真实物体坐标和我们占位值完全不是一个量级）。
 
@@ -34,16 +37,18 @@ T03 场景坐标（见 `docs/scene_grounding_t03.md`）。现在卡住大批量�
 - [x] taxonomy 定义、R11-R19/F01-F03/P21-P23 控制流实现+验证
 - [x] `IsaacLabR1Adapter` 真实实现合并、`--adapter isaaclab` CLI 接通
 - [x] 场景坐标用 sim 端真实数据校准（`docs/scene_grounding_t03.md`）
-- [ ] **"目标环"缺口需要人来确认**（不是代码任务，见 §1 最后一条）
-- [ ] 物体身份最终确认（Crew Lock Bag vs 继续用 T01/T02/T03 占位）
+- [x] **"目标环"缺口** ——按用户指示删除，已同步进代码和文档
+- [x] `coordination_mode`/`phase_offset` 字段补齐（沿用 sim 端 scenario schema 的字段名）——
+      **但 episode_runner.py 还没有真正按这两个字段驱动"双臂异步"行为**，目前只是数据结构
+      对齐了，N08/P24 的真实调度逻辑还是待办，见 `docs/sim_data_request_v1.md`
+- [ ] 物体身份最终确认（Crew Lock Bag vs 继续用 T01/T02/T03 占位）——不阻塞开工，先用占位物体
 - [ ] `r1_bimanual_dataset/config.py` 的 `DATASET_FPS=10.0` ——只影响那套独立
       pipeline，如果以后要接入这边框架才需要改
 - [ ] 拿到真实"可达工作空间范围"（不是单点坐标）后，补 N02-N10 的 yaml +
-      `batch_generate.py` 采样范围、补 P24
+      `batch_generate.py` 采样范围——**需要 sim 同学收集数据，见 `docs/sim_data_request_v1.md`**
 
 ### 阶段 1：在真 Isaac Sim 里跑通我们的 `EpisodeRunner`（对应 TRA-01"5条成功episode试采"）
-**门槛**：目标环缺口已有明确结论（要么场景里确实有、给出坐标；要么正式决定
-这阶段不做目标环，退回"抓起→稳定→放下"）。
+**门槛**：无（目标环缺口已解决）。现在就可以开始。
 
 **当前状态**：sim 端近100条测试证明的是"抓取-抬升-保持-放置-松开"这条链路在真实物理下
 成立，但走的还不完全是我们 `EpisodeRunner` 的状态机+detectors+recovery 这条路径

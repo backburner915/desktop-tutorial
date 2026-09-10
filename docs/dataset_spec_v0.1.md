@@ -1,8 +1,22 @@
-# Dataset Specification V0.1
+# Dataset Specification V0.2
 
-状态：**已冻结**（直接继承 TRA-01，2026-09-07）。批量采集前不得修改；如需修改必须先更新 TRA-01 并同步这里，视为破坏性变更（V0.1 → V0.2）。
+状态：**已冻结**（原始继承 TRA-01，2026-09-07；V0.2 于 2026-09-10 按用户明确指示做了一处
+偏离 TRA-01 原文的breaking change，见下方"与 TRA-01 的偏离"）。批量采集前不得再改；如需
+再改必须先更新 TRA-01 并同步这里。
 
 本文档是训练端（TRA-01）与仿真端（本仓库 `episode_gen/`）之间的**唯一数据合同**。`episode_gen/dataset_writer.py` 的实现必须逐字段满足本文档；任何一项不满足，`tests/` 里的校验测试必须失败并阻止批量采集，对应 TRA-01 §11 的验收清单。
+
+## 0. 与 TRA-01 的偏离（V0.1 → V0.2，需要回头找训练/VLA同学同步）
+
+TRA-01 原文任务是"抓取 Crew Lock Bag，放入绿色目标环"。经与 sim 同学核对真实场景
+（完整 prim 扫描 + 近100条真实测试的 success 判据），**场景里没有任何叫"目标环"/"ring"
+的物体，抓取对象目前也是占位方块（T01/T02/T03），不是 Crew Lock Bag**。用户已明确指示
+删除"放入目标环"这个要求。V0.2 改为：抓取 → 抬升 → 稳定保持 → 移动到放置位置附近 → 
+放下 → 松开，不要求"环形标记物"，放置位置退化为一个坐标+半径/高度容差的邻近性判定
+（见 `episode_gen/scenario.py::ScenarioConfig.place_target_pose`）。
+
+**这是本仓库内部对实现现实的适配，不是训练/VLA同学正式批准的 TRA-01 修订**——如果他们
+的训练方案依赖"放入环形目标"这个具体动作语义，需要专门找他们同步这个变化。
 
 ## 1. 基础配置（不可变更）
 
@@ -10,13 +24,13 @@
 |---|---|
 | 基础模型 | `lerobot/smolvla_base` |
 | 数据格式 | LeRobot Dataset v3 |
-| 任务 | R1 双臂抓取 Crew Lock Bag，放入绿色目标环 |
+| 任务 | R1 双臂抓取物体，抬升、稳定保持后放下（**不要求放入目标环，见上）** |
 | 相机 | `front`、`left_wrist`、`right_wrist` |
 | 图像 | RGB，640×480，30 FPS，`shape=[480,640,3]` |
 | state | `observation.state`: `float32[16]`，实际测得关节位置 |
 | action | `action`: `float32[16]`，观测后实际下发的**绝对**关节位置目标 |
 | 频率 | 30 Hz（state/action/video 同一采样周期），单帧周期 33.333 ms |
-| 任务文本 | 固定，逐字：`Pick up the Crew Lock Bag with both arms and place it in the green target ring.` |
+| 任务文本 | 固定，逐字：`Grasp the object with both hands, lift it, hold it steadily, and place it down.`（与 sim 端近100条真实测试实际使用的指令文本一致） |
 
 ## 2. 16D 顺序（永久固定，与 galaxea_lab 源码逐字一致）
 
@@ -81,9 +95,10 @@ seed
 
 `success` / `failure_reason` 记录在 episode 级别的 `episode_meta.json`，不是逐帧字段。
 
-## 6. 成功判据（与 TRA-01 §7 一致）
+## 6. 成功判据（V0.2，见 §0 的偏离说明）
 
-同时满足：双侧有效夹持 / 物体离开支撑面 / 运输过程中未掉落 / 物体进入目标区域 / 完成释放 / 释放后 0.5–1.0s 内未倒落或滑出目标区域。禁止用 FixedJoint 伪造成功轨迹。
+同时满足：双侧有效夹持 / 物体离开支撑面 / 运输过程中未掉落 / 到达 `place_target_pose`
+附近（半径+高度容差判定，不要求环形标记物，见 `IsaacLabR1Adapter._inside_target`）/ 完成释放 / 释放后 0.5–1.0s 内保持稳定（未倒落、未明显位移）。禁止用 FixedJoint 伪造成功轨迹——sim 端 `scene_config_source_snapshot.json` 里 `scripted_grasp_attachment: false` 确认了这点。
 
 ## 7. 成功 / 恢复 / 纯失败 三类数据如何参与训练（对应会议纪要 §7）
 
