@@ -1,0 +1,45 @@
+# R11 — premature surface contact during APPROACH, then retreat + retry
+# (taxonomy §2). This ID is a closure: changing `anomaly.surface` /
+# `anomaly.contact_arm` / the distance & offset fields below covers
+# "hit a cabinet", "hit an obstacle", right-arm variants, different
+# severities, etc. without touching any code. See episode_gen/detectors.py
+# :: detect_r11 and episode_gen/recovery.py.
+scenario_id: R11
+family: R
+seed: 1101
+task_text: "Grasp the object with both hands, lift it, hold it steadily, and place it down."
+control_hz: 30.0
+
+object_x: -2.65    # T03 bbox center, see docs/scene_grounding_t03.md
+object_y: 3.85
+object_z: 0.637
+object_roll: 0.0
+object_pitch: 0.0
+object_yaw: 0.0
+
+left_start_pose: null
+right_start_pose: null
+
+left_grasp_offset: [0.0, 0.0, 0.0]
+right_grasp_offset: [0.0, 0.0, 0.0]
+left_approach_angle: 0.0
+right_approach_angle: 0.0
+pregrasp_distance: 0.1   # matches reference/scenario_t03.json
+
+lift_direction: [0.0, 0.0, 1.0]
+lift_height: 0.12        # matches reference/scenario_t03.json lift_vector
+hold_duration_s: 0.3   # shortened for fast batch iteration; TRA-01 success window is separate (§6)
+
+place_target_pose: [-2.633, 3.506, 1.429]  # NOT a verified ring - real "place" coord from a tested episode, see docs/scene_grounding_t03.md
+
+anomaly:
+  scenario_class: R11
+  trigger_phase: APPROACH
+  contact_arm: left
+  surface: table
+  object_distance_at_contact: 0.15
+  retreat_distance: 0.10
+  retry_approach_angle_delta: 0.15
+  retry_grasp_offset_delta: [0.0, 0.0, 0.02]
+  max_recovery_attempts: 3
+  extra: {}
