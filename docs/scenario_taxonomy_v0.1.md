@@ -91,7 +91,7 @@ Failure 数据单独落盘（按 TRA-01 §8），默认不进首轮 SFT。`failu
 | P21 | `pregrasp_distance` 取分布下限 | ✅ 已实现（`configs/scenarios/p21_min_pregrasp_distance.yaml`） |
 | P22 | `approach_angle` 取分布边界 | ✅ 已实现（`p22_max_approach_angle.yaml`） |
 | P23 | 物体姿态旋转取边界值（仍在可抓取范围内） | ✅ 已实现（`p23_max_object_rotation.yaml`） |
-| P24 | 双臂时间不同步取容忍上限（N08 的边界版） | ❌ 未实现——`ScenarioConfig` 目前没有"左右臂到达时间偏差"这个字段，N08 本身也还没做，做不了 P24 的边界版。需要先给 N08 设计好怎么表示时序偏差（比如给 `left_start_pose`/`right_start_pose` 配一个独立的阶段起始延迟），P24 才有意义，不是简单加一份 yaml 能解决的 |
+| P24 | 双臂时间不同步取容忍上限（N08 的边界版） | ✅ 已实现（`configs/scenarios/p24_max_phase_offset.yaml`，`phase_offset=0.060` 取 N08 约定范围上限），`MockSimAdapter` 验证正常完成、零 recovery |
 
 P21-P23 都用 `MockSimAdapter` 验证过：边界参数下 episode 应该正常走完、零 recovery（`tests/test_r15_r19_and_f02.py::TestPerturbationScenarios`）。
 
@@ -101,7 +101,7 @@ P21-P23 都用 `MockSimAdapter` 验证过：边界参数下 episode 应该正常
 
 ## 6. 待确认 / 后续排期
 
-- ~~R15-R19、F02、P21-P23：等 R11-R14 验收后再排期~~ 已完成（控制流层面，`MockSimAdapter` 验证过）。taxonomy 里定义的 N/R/F/P 四类，除 N02-N10（还没写对应 yaml，只有 N01）和 P24（缺少字段，见上）之外，已经全部有检测器/恢复逻辑 + config + 单测覆盖。
+- ~~R15-R19、F02、P21-P24、N02-N10：等 R11-R14 验收后再排期~~ 已全部完成（控制流层面，`MockSimAdapter` 验证过，15个测试全过）。taxonomy 里定义的 N/R/F/P 四类现在全部有实现——N02-N10 的采样范围是 sim 端给的"临时约定"，不是真实标定边界，见 `docs/sim_data_request_v1.md`。
 - 障碍物/柜体等碰撞面的 taxonomy 扩展（R11 的"闭包"能力）依赖场景 USD 里实际有哪些可碰撞物体，待场景文件同步后补齐 `surface` 枚举。
 - **物体身份还未最终确认**：`configs/scenarios/*.yaml` 里的物体坐标已经换成了 sim 端真实
   验证过的 T03 数值（见 `docs/scene_grounding_t03.md`），但 T01/T02/T03 本身还是不带明确

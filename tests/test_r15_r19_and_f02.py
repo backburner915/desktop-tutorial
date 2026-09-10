@@ -115,6 +115,7 @@ class TestPerturbationScenarios(unittest.TestCase):
             "configs/scenarios/p21_min_pregrasp_distance.yaml",
             "configs/scenarios/p22_max_approach_angle.yaml",
             "configs/scenarios/p23_max_object_rotation.yaml",
+            "configs/scenarios/p24_max_phase_offset.yaml",
         ):
             with self.subTest(path=path):
                 scenario = ScenarioConfig.from_yaml(path)
