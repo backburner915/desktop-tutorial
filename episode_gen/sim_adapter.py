@@ -145,11 +145,23 @@ class MockSimAdapter(SimAdapter):
     Not a physics simulator: qpos values are linearly-interpolated
     placeholders (valid floats, not kinematically meaningful). What it
     *does* faithfully reproduce is the fault-then-recovery timing this
-    framework needs to prove out: on an episode whose scenario carries
-    an `anomaly`, it injects that anomaly's contact/force signature
-    exactly once (the first APPROACH/GRASP attempt), then behaves
-    nominally on every retry — so a correct episode_runner should show
-    exactly one RETREAT and then a SUCCESS.
+    framework needs to prove out:
+
+      - `scenario.anomaly` (the primary fault, R11-R19): injected exactly
+        once, on the first attempt through its trigger phase, then the
+        adapter behaves nominally on every retry — a correct
+        episode_runner should show exactly one RETREAT then SUCCESS.
+      - `scenario.secondary_anomaly` (F02 only): injected exactly once,
+        on the *second* attempt through its trigger phase (i.e. while
+        already recovering from the primary fault) — a correct
+        episode_runner should go straight to FAILURE without a second
+        RETREAT, since F02 is a compounding failure, not something to
+        retry (taxonomy §3).
+
+    Currently only the APPROACH-phase closures (R11/R12/R14/R16/R17/R18)
+    are wired up as a *secondary* anomaly, since that's enough to
+    exercise the F02 path end-to-end; R13/R15/R19 are only exercised as
+    primary faults for now.
     """
 
     def __init__(self, approach_steps: int = 6, fault_at_progress: float = 0.4) -> None:
@@ -160,8 +172,10 @@ class MockSimAdapter(SimAdapter):
         self._t = 0.0
         self._last_phase: Phase | None = None
         self._approach_attempt = 0
+        self._lift_attempt = 0
         self._phase_progress = 0
         self._fault_already_used = False
+        self._secondary_fault_already_used = False
         self._qpos = list(DEFAULT_QPOS_VEC)
         self._gripper_close_steps = 0
 
@@ -169,28 +183,63 @@ class MockSimAdapter(SimAdapter):
         self._t = 0.0
         self._last_phase = None
         self._approach_attempt = 0
+        self._lift_attempt = 0
         self._phase_progress = 0
         self._fault_already_used = False
+        self._secondary_fault_already_used = False
         self._qpos = list(DEFAULT_QPOS_VEC)
         self._gripper_close_steps = 0
         return self._observe(dist=1.0, contacts=set(), extra={})
+
+    # scenario classes whose fault signature fires during APPROACH and is
+    # supported both as a primary and as a secondary (F02) anomaly
+    _APPROACH_FAULT_CLASSES = ("R11", "R12", "R14", "R16", "R17", "R18")
+
+    def _approach_fault_signature(
+        self, an, dist: float
+    ) -> tuple[float, set[tuple[str, str]], dict[str, Any]]:
+        """What APPROACH should report if `an`'s fault is firing this step."""
+        contacts_add: set[tuple[str, str]] = set()
+        extra_add: dict[str, Any] = {}
+        arms = ["left", "right"] if an.contact_arm == "both" else [an.contact_arm]
+
+        if an.scenario_class == "R11":
+            dist = max(dist, an.object_distance_at_contact + 0.05)
+            for arm in arms:
+                contacts_add.add((f"{arm}_arm_link6", an.surface))
+        elif an.scenario_class == "R12":
+            dist = max(dist, an.object_distance_at_contact + 0.05)
+            for arm in arms:
+                contacts_add.add((f"{arm}_arm_link6", "object"))
+                extra_add[f"{arm}_grasp_alignment_error"] = 0.10
+        elif an.scenario_class == "R14":
+            contacts_add.add(("left_arm_link6", "right_arm_link6"))
+        elif an.scenario_class == "R16":
+            threshold = an.extra.get("displacement_threshold_m", 0.05)
+            extra_add["_object_pos_override"] = (0.40 + threshold + 0.05, 0.0, 1.0)
+        elif an.scenario_class == "R17":
+            stall_max = an.extra.get("stall_time_s", 1.0)
+            for arm in arms:
+                extra_add[f"{arm}_approach_stall_s"] = stall_max + 0.5
+        elif an.scenario_class == "R18":
+            margin_min = an.extra.get("margin_min", 0.05)
+            extra_add["_joint_margin_override"] = {"left_arm_joint2": margin_min - 0.01}
+        return dist, contacts_add, extra_add
 
     def step(self, phase: Phase, scenario: ScenarioConfig) -> tuple[Observation, list[float]]:
         if phase != self._last_phase:
             self._phase_progress = 0
             if phase == Phase.APPROACH:
                 self._approach_attempt += 1
+            elif phase == Phase.LIFT:
+                self._lift_attempt += 1
         self._last_phase = phase
         self._phase_progress += 1
         self._t += self._dt
 
         an = scenario.anomaly
-        fault_this_step = (
-            an is not None
-            and not self._fault_already_used
-            and self._approach_attempt == 1
-            and self._phase_progress / self._approach_steps >= self._fault_at_progress
-        )
+        sec = scenario.secondary_anomaly
+        fault_progress_hit = self._phase_progress / self._approach_steps >= self._fault_at_progress
 
         contacts: set[tuple[str, str]] = set()
         extra: dict[str, Any] = {}
@@ -198,18 +247,24 @@ class MockSimAdapter(SimAdapter):
 
         if phase == Phase.APPROACH:
             extra["phase_complete"] = self._phase_progress >= self._approach_steps
-            if fault_this_step and an.scenario_class in ("R11", "R12", "R14"):
+            if (
+                an is not None and an.scenario_class in self._APPROACH_FAULT_CLASSES
+                and not self._fault_already_used and self._approach_attempt == 1
+                and fault_progress_hit
+            ):
                 self._fault_already_used = True
-                dist = max(dist, an.object_distance_at_contact + 0.05)
-                for arm in (["left", "right"] if an.contact_arm == "both" else [an.contact_arm]):
-                    link = f"{arm}_arm_link6"
-                    if an.scenario_class == "R11":
-                        contacts.add((link, an.surface))
-                    elif an.scenario_class == "R12":
-                        contacts.add((link, "object"))
-                        extra[f"{arm}_grasp_alignment_error"] = 0.10
-                if an.scenario_class == "R14":
-                    contacts.add(("left_arm_link6", "right_arm_link6"))
+                dist, c_add, e_add = self._approach_fault_signature(an, dist)
+                contacts |= c_add
+                extra.update(e_add)
+            if (
+                sec is not None and sec.scenario_class in self._APPROACH_FAULT_CLASSES
+                and not self._secondary_fault_already_used and self._approach_attempt == 2
+                and fault_progress_hit
+            ):
+                self._secondary_fault_already_used = True
+                dist, c_add, e_add = self._approach_fault_signature(sec, dist)
+                contacts |= c_add
+                extra.update(e_add)
         elif phase == Phase.GRASP:
             self._gripper_close_steps += 1
             closed = self._gripper_close_steps >= 2
@@ -229,12 +284,28 @@ class MockSimAdapter(SimAdapter):
                 else:
                     grip_force = {"left": 20.0, "right": 20.0}
                 extra["_grip_force"] = grip_force
+        elif phase == Phase.LIFT:
+            extra["phase_complete"] = True
+            if self._lift_attempt == 1 and an is not None and not self._fault_already_used:
+                if an.scenario_class == "R19":
+                    self._fault_already_used = True
+                    extra["lift_stalled"] = True
+                elif an.scenario_class == "R15":
+                    self._fault_already_used = True
+                    threshold = an.extra.get("slip_threshold_m", 0.02)
+                    for arm in (["left", "right"] if an.contact_arm == "both" else [an.contact_arm]):
+                        extra[f"{arm}_grasp_slip_m"] = threshold + 0.01
         elif phase == Phase.HOLD:
             hold_steps = max(1, round(scenario.hold_duration_s * self.control_hz))
             extra["phase_complete"] = self._phase_progress >= hold_steps
 
         grip_force = extra.pop("_grip_force", {"left": 20.0, "right": 20.0})
-        obs = self._observe(dist=dist, contacts=contacts, extra=extra, grip_force=grip_force)
+        object_pos_override = extra.pop("_object_pos_override", None)
+        joint_margin_override = extra.pop("_joint_margin_override", None)
+        obs = self._observe(
+            dist=dist, contacts=contacts, extra=extra, grip_force=grip_force,
+            object_pos_override=object_pos_override, joint_margin_override=joint_margin_override,
+        )
         action = list(self._qpos)  # mock: hold pose; real adapter returns the IK solution
         return obs, action
 
@@ -253,17 +324,22 @@ class MockSimAdapter(SimAdapter):
         contacts: set[tuple[str, str]],
         extra: dict[str, Any],
         grip_force: dict[str, float] | None = None,
+        object_pos_override: tuple[float, float, float] | None = None,
+        joint_margin_override: dict[str, float] | None = None,
     ) -> Observation:
+        joint_limit_margin = {j: 1.0 for j in JOINT_ORDER}
+        if joint_margin_override:
+            joint_limit_margin.update(joint_margin_override)
         return Observation(
             t=self._t,
             qpos=list(self._qpos),
             qvel=[0.0] * len(JOINT_ORDER),
             left_ee_pos=(0.4 - dist, 0.2, 1.0),
             right_ee_pos=(0.4 - dist, -0.2, 1.0),
-            object_pos=(0.4, 0.0, 1.0),
+            object_pos=object_pos_override or (0.4, 0.0, 1.0),
             contacts=contacts,
             dist_to_grasp_frame={"left": dist, "right": dist},
             grip_force=grip_force or {"left": 0.0, "right": 0.0},
-            joint_limit_margin={j: 1.0 for j in JOINT_ORDER},
+            joint_limit_margin=joint_limit_margin,
             extra=extra,
         )

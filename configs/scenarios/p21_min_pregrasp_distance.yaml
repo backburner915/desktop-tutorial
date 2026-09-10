@@ -1,0 +1,25 @@
+# P21 — pregrasp_distance at the low end of the sampling range: should
+# still complete normally (this is a boundary test, not an anomaly).
+scenario_id: P21
+family: P
+seed: 2101
+task_text: "Pick up the Crew Lock Bag with both arms and place it in the green target ring."
+control_hz: 30.0
+object_x: 0.40
+object_y: 0.00
+object_z: 1.00
+object_roll: 0.0
+object_pitch: 0.0
+object_yaw: 0.0
+left_start_pose: null
+right_start_pose: null
+left_grasp_offset: [0.0, 0.0, 0.0]
+right_grasp_offset: [0.0, 0.0, 0.0]
+left_approach_angle: 0.0
+right_approach_angle: 0.0
+pregrasp_distance: 0.05   # N01 default is 0.15; this is the aggressive low end
+lift_direction: [0.0, 0.0, 1.0]
+lift_height: 0.15
+hold_duration_s: 1.0
+target_ring_pose: [0.55, 0.35, 1.00]
+anomaly: null

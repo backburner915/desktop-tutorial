@@ -1,0 +1,50 @@
+# F02 — a second, distinct anomaly fires while already recovering from
+# the first one. Primary = R11 (premature table contact, attempt 1);
+# secondary = R14 (arm-arm collision, attempt 2, i.e. during recovery).
+# episode_runner only checks secondary_anomaly once recovery_count > 0,
+# and a hit goes straight to FAILURE — it is never itself retried
+# (taxonomy §3).
+scenario_id: F02
+family: F
+seed: 202
+task_text: "Pick up the Crew Lock Bag with both arms and place it in the green target ring."
+control_hz: 30.0
+object_x: 0.40
+object_y: 0.00
+object_z: 1.00
+object_roll: 0.0
+object_pitch: 0.0
+object_yaw: 0.0
+left_start_pose: null
+right_start_pose: null
+left_grasp_offset: [0.0, 0.0, 0.0]
+right_grasp_offset: [0.0, 0.0, 0.0]
+left_approach_angle: 0.0
+right_approach_angle: 0.0
+pregrasp_distance: 0.15
+lift_direction: [0.0, 0.0, 1.0]
+lift_height: 0.15
+hold_duration_s: 0.3
+target_ring_pose: [0.55, 0.35, 1.00]
+anomaly:
+  scenario_class: R11
+  trigger_phase: APPROACH
+  contact_arm: left
+  surface: table
+  object_distance_at_contact: 0.15
+  retreat_distance: 0.10
+  retry_approach_angle_delta: 0.15
+  retry_grasp_offset_delta: [0.0, 0.0, 0.02]
+  max_recovery_attempts: 3
+  extra: {}
+secondary_anomaly:
+  scenario_class: R14
+  trigger_phase: APPROACH
+  contact_arm: both
+  surface: n/a
+  object_distance_at_contact: 0.12
+  retreat_distance: 0.10
+  retry_approach_angle_delta: 0.20
+  retry_grasp_offset_delta: [0.0, 0.0, 0.0]
+  max_recovery_attempts: 3
+  extra: {}
