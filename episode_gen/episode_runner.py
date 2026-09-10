@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from episode_gen.detectors import run_detectors
+from episode_gen.detectors import run_detectors, run_secondary_detector
 from episode_gen.dataset_writer import EpisodeResult, EpisodeWriter
 from episode_gen.fsm import NOMINAL_NEXT, TERMINAL_PHASES, Phase
 from episode_gen.recovery import RecoveryManager
@@ -96,13 +96,29 @@ class EpisodeRunner:
                 break
 
             if phase != Phase.RETREAT:
-                event = run_detectors(scenario, phase, obs)
-                if event is not None:
-                    action_result = recovery_mgr.handle(event, scenario)
+                primary_event = run_detectors(scenario, phase, obs)
+
+                # F02: a second, distinct anomaly firing while already
+                # recovering from the first one is a compounding failure,
+                # not something to retry — see taxonomy §3.
+                if primary_event is None and scenario.secondary_anomaly is not None and recovery_mgr.recovery_count > 0:
+                    secondary_event = run_secondary_detector(scenario, phase, obs)
+                    if secondary_event is not None:
+                        assert scenario.anomaly is not None
+                        failure_reason = (
+                            f"F02_secondary_anomaly:{secondary_event.scenario_class}"
+                            f"_during_recovery_of:{scenario.anomaly.scenario_class}"
+                        )
+                        phase = Phase.FAILURE
+                        phase_log.append(phase.value)
+                        break
+
+                if primary_event is not None:
+                    action_result = recovery_mgr.handle(primary_event, scenario)
                     phase = action_result.next_phase
                     phase_log.append(phase.value)
                     if phase == Phase.FAILURE:
-                        failure_reason = f"F01_recovery_exhausted:{event.scenario_class}"
+                        failure_reason = f"F01_recovery_exhausted:{primary_event.scenario_class}"
                         break
                     resume_after_retreat = action_result.resume_phase
                     continue

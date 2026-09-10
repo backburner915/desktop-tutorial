@@ -20,6 +20,11 @@ _RESUME_PHASE_FOR_CLASS: dict[str, Phase] = {
     "R12": Phase.APPROACH,
     "R13": Phase.APPROACH,
     "R14": Phase.APPROACH,
+    "R15": Phase.GRASP,      # re-grip before lifting again
+    "R16": Phase.APPROACH,   # re-plan the grasp frame off the updated object pose
+    "R17": Phase.PREGRASP,   # back off further than a plain retreat, then re-approach
+    "R18": Phase.APPROACH,   # pick an alternate pose/IK branch
+    "R19": Phase.GRASP,      # release and re-grip before lifting again
 }
 
 
@@ -90,3 +95,29 @@ class RecoveryManager:
             # widen the approach corridor between the two arms
             scenario.left_approach_angle += anomaly.retry_approach_angle_delta
             scenario.right_approach_angle -= anomaly.retry_approach_angle_delta
+        elif event.scenario_class == "R15":
+            # grip tighter / lower before lifting again
+            if event.arm in ("left", "both"):
+                scenario.left_grasp_offset = _offset(scenario.left_grasp_offset)
+            if event.arm in ("right", "both"):
+                scenario.right_grasp_offset = _offset(scenario.right_grasp_offset)
+        elif event.scenario_class == "R16":
+            # nothing to offset — the next APPROACH re-reads obs.object_pos
+            # for the updated grasp frame, scenario params are unchanged
+            pass
+        elif event.scenario_class == "R17":
+            scenario.pregrasp_distance += anomaly.retreat_distance
+            if event.arm in ("left", "both"):
+                scenario.left_approach_angle += anomaly.retry_approach_angle_delta
+            if event.arm in ("right", "both"):
+                scenario.right_approach_angle += anomaly.retry_approach_angle_delta
+        elif event.scenario_class == "R18":
+            if event.arm in ("left", "both"):
+                scenario.left_approach_angle += anomaly.retry_approach_angle_delta
+            if event.arm in ("right", "both"):
+                scenario.right_approach_angle -= anomaly.retry_approach_angle_delta
+        elif event.scenario_class == "R19":
+            if event.arm in ("left", "both"):
+                scenario.left_grasp_offset = _offset(scenario.left_grasp_offset)
+            if event.arm in ("right", "both"):
+                scenario.right_grasp_offset = _offset(scenario.right_grasp_offset)

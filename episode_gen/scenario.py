@@ -92,19 +92,28 @@ class ScenarioConfig:
     target_ring_pose: tuple[float, float, float] = (0.55, 0.35, 1.00)
 
     anomaly: AnomalyConfig | None = None
+    # F02 only: a second, distinct anomaly that fires while already
+    # recovering from `anomaly` (taxonomy §3). episode_runner only checks
+    # this once recovery_count > 0, and a hit goes straight to FAILURE —
+    # it is never itself retried.
+    secondary_anomaly: AnomalyConfig | None = None
 
     def __post_init__(self) -> None:
         if self.family not in ("N", "R", "F", "P"):
             raise ValueError(f"unknown family {self.family!r} for {self.scenario_id}")
         if self.family == "R" and self.anomaly is None:
             raise ValueError(f"{self.scenario_id} is family R but has no anomaly config")
+        if self.secondary_anomaly is not None and self.anomaly is None:
+            raise ValueError(f"{self.scenario_id} has secondary_anomaly but no primary anomaly")
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "ScenarioConfig":
         data = yaml.safe_load(Path(path).read_text())
         anomaly_data = data.pop("anomaly", None)
         anomaly = AnomalyConfig(**anomaly_data) if anomaly_data else None
-        return cls(anomaly=anomaly, **data)
+        secondary_data = data.pop("secondary_anomaly", None)
+        secondary = AnomalyConfig(**secondary_data) if secondary_data else None
+        return cls(anomaly=anomaly, secondary_anomaly=secondary, **data)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
