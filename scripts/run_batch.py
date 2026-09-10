@@ -11,14 +11,22 @@ summary report for human spot-checking.
         --scenarios configs/scenarios/generated/r11 \
         --out-dir out/episodes --adapter mock
 
-This is the one script hundreds of generated configs get run through —
-there is no such thing as "200 generated scripts", only 200 generated
-YAML files fed through this single runner.
+This is the one script hundreds/thousands of generated configs get run
+through — there is no such thing as "200 generated scripts", only 200
+generated YAML files fed through this single runner.
+
+--adapter isaaclab requires --env-factory module:function, same as
+scripts/run_episode.py — see that script's --help or
+docs/sim_adapter_handoff.md for what the factory function needs to
+return. The env is built ONCE and reused across the whole batch (Isaac
+Sim startup is expensive); each episode calls adapter.reset(scenario)
+to move to the next one.
 """
 
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import sys
 from pathlib import Path
@@ -29,31 +37,40 @@ from episode_gen.episode_runner import EpisodeRunConfig, EpisodeRunner
 from episode_gen.scenario import ScenarioConfig
 
 
-def build_adapter(name: str):
+def build_adapter(name: str, env_factory: str | None):
     if name == "mock":
         from episode_gen.sim_adapter import MockSimAdapter
         return MockSimAdapter()
     if name == "isaaclab":
-        raise SystemExit(
-            "IsaacLabR1Adapter is a skeleton (see episode_gen/sim_adapter.py "
-            "TODOs) — not runnable yet."
-        )
+        if not env_factory:
+            raise SystemExit(
+                "--adapter isaaclab requires --env-factory module:function — see "
+                "this script's --help / docs/sim_adapter_handoff.md."
+            )
+        module_name, _, func_name = env_factory.partition(":")
+        if not module_name or not func_name:
+            raise SystemExit(f"--env-factory must be 'module:function', got {env_factory!r}")
+        module = importlib.import_module(module_name)
+        env = getattr(module, func_name)()
+        from episode_gen.sim_adapter import IsaacLabR1Adapter
+        return IsaacLabR1Adapter(env)
     raise SystemExit(f"unknown adapter {name!r}, expected 'mock' or 'isaaclab'")
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description=__doc__)
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--scenarios", required=True, help="directory of scenario YAMLs")
     p.add_argument("--out-dir", required=True, help="parent dir for episode outputs")
     p.add_argument("--task-index", type=int, default=0)
     p.add_argument("--adapter", choices=["mock", "isaaclab"], default="mock")
+    p.add_argument("--env-factory", default=None, help="module:function returning the Isaac Lab env (isaaclab only)")
     args = p.parse_args()
 
     paths = sorted(Path(args.scenarios).glob("*.yaml"))
     if not paths:
         raise SystemExit(f"no *.yaml files found under {args.scenarios}")
 
-    adapter = build_adapter(args.adapter)
+    adapter = build_adapter(args.adapter, args.env_factory)
     runner = EpisodeRunner(adapter)
 
     rows = []
