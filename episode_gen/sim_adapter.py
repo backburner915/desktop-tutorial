@@ -1644,8 +1644,26 @@ class MockSimAdapter(SimAdapter):
                 extra.update(e_add)
         elif phase == Phase.GRASP:
             self._gripper_close_steps += 1
-            closed = self._gripper_close_steps >= 2
-            extra["gripper_closed"] = {"left": closed, "right": closed}
+            # coordination_mode/phase_offset (N08/P24): only the gripper
+            # axes are staggered — arm waypoints still go out together, and
+            # RELEASE is always treated as joint (see sim_data_request_v1.md
+            # §5, matching r1_bimanual_dataset/core/bimanual_controller.py's
+            # actual behavior). base_close_step is when the leading side
+            # closes; the lagging side closes phase_offset seconds later.
+            offset_steps = max(0, round(abs(scenario.phase_offset) * self.control_hz))
+            base_close_step = 2
+            if scenario.coordination_mode == "left_leads":
+                left_close_step, right_close_step = base_close_step, base_close_step + offset_steps
+            elif scenario.coordination_mode == "right_leads":
+                left_close_step, right_close_step = base_close_step + offset_steps, base_close_step
+            else:
+                left_close_step = right_close_step = base_close_step
+            closed_map = {
+                "left": self._gripper_close_steps >= left_close_step,
+                "right": self._gripper_close_steps >= right_close_step,
+            }
+            closed = closed_map["left"] and closed_map["right"]
+            extra["gripper_closed"] = closed_map
             extra["phase_complete"] = closed
             if closed:
                 if (

@@ -83,6 +83,12 @@ class ScenarioConfig:
     left_approach_angle: float = 0.0
     right_approach_angle: float = 0.0
     pregrasp_distance: float = 0.15
+    # N10 axis: target clearance between the approach trajectory and the
+    # table/support surface. Diagnostic/sampling metadata only for now —
+    # neither MockSimAdapter nor IsaacLabR1Adapter shapes the actual
+    # trajectory around this value yet (that needs real trajectory
+    # modeling, not just a scalar). See docs/sim_data_request_v1.md §3 N10.
+    approach_clearance_m: float = 0.01
 
     lift_direction: tuple[float, float, float] = (0.0, 0.0, 1.0)
     lift_height: float = 0.15
@@ -91,6 +97,9 @@ class ScenarioConfig:
     # N08/P24 axis: how far the two arms' phase transitions drift apart.
     # Field names match sim's own scenario schema (reference/scenario_t03.json,
     # metadata.json) rather than inventing a parallel convention.
+    # Real behavior (which arm's gripper axes lag, by how much) is driven
+    # by MockSimAdapter.step() during GRASP; IsaacLabR1Adapter's behavior
+    # here comes from r1_bimanual_dataset/core/bimanual_controller.py.
     # coordination_mode: "synchronous" | "left_leads" | "right_leads"
     coordination_mode: str = "synchronous"
     # phase_offset: seconds the lagging arm's phase transitions are delayed

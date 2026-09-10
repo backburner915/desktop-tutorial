@@ -29,20 +29,25 @@ RESET → PREGRASP → APPROACH → CONTACT_CHECK → GRASP → LIFT → HOLD
 
 条件分布采样，不是十套不同算法。共享的 config 轴：
 
-`object_x/y/z`、`object_roll/pitch/yaw`、`left_start_pose`、`right_start_pose`、`left_grasp_offset`、`right_grasp_offset`、`left_approach_angle`、`right_approach_angle`、`pregrasp_distance`、`lift_direction`、`target_ring_pose`。
+`object_x/y/z`、`object_roll/pitch/yaw`、`left_start_pose`、`right_start_pose`、`left_grasp_offset`、`right_grasp_offset`、`left_approach_angle`、`right_approach_angle`、`pregrasp_distance`、`lift_direction`、`place_target_pose`、`coordination_mode`、`phase_offset`、`approach_clearance_m`。
 
-| ID | 条件 | 说明 |
-|---|---|---|
-| N01 | nominal 标准抓取 | 所有参数取默认值，作为基线 episode |
-| N02 | object x/y/z 偏移 | 物体初始位置在工作空间内随机偏移 |
-| N03 | object roll/pitch/yaw 偏移 | 物体初始姿态小角度旋转 |
-| N04 | 左右臂初始姿态变化 | `left_start_pose`/`right_start_pose` 在关节空间内小范围采样 |
-| N05 | grasp offset 变化 | 抓取点相对 bounding-box 生成的 nominal grasp frame 有偏移 |
-| N06 | approach angle 变化 | 接近方向角度采样 |
-| N07 | pregrasp distance 变化 | 预抓取距离采样 |
-| N08 | 左右臂到达时间轻微不同步 | 两臂 APPROACH→GRASP 的时间偏差在容忍范围内 |
-| N09 | 工作空间边缘抓取 | 物体位置接近可达域边界但仍可达 |
-| N10 | 接近路径靠近桌面但不发生碰撞 | 轨迹 clearance 小但保持在安全阈值之上 |
+| ID | 条件 | 说明 | 实现状态 |
+|---|---|---|---|
+| N01 | nominal 标准抓取 | 所有参数取默认值，作为基线 episode | ✅ `configs/scenarios/n01_nominal.yaml` |
+| N02 | object x/y/z 偏移 | 物体初始位置在工作空间内随机偏移 | ✅ `episode_gen/n_family_sampling.py::generate_n02_object_xy_offset`，⚠️ 范围是临时约定不是真实边界 |
+| N03 | object roll/pitch/yaw 偏移 | 物体初始姿态小角度旋转 | ✅ `generate_n03_object_yaw`（目前只做 yaw，roll/pitch 留了扩展点）⚠️ 同上 |
+| N04 | 左右臂初始姿态变化 | `left_start_pose`/`right_start_pose` 在关节空间内小范围采样 | ✅ `generate_n04_arm_start_jitter` ⚠️ 同上 |
+| N05 | grasp offset 变化 | 抓取点相对 bounding-box 生成的 nominal grasp frame 有偏移 | ✅ `generate_n05_grasp_offset` ⚠️ 同上 |
+| N06 | approach angle 变化 | 接近方向角度采样 | ✅ `generate_n06_approach_angle`——**简化**：sim 端真实 schema 是三轴向量，我们的 `left/right_approach_angle` 是标量，这里只采样标量近似 |
+| N07 | pregrasp distance 变化 | 预抓取距离采样 | ✅ `generate_n07_pregrasp_distance` ⚠️ 范围临时约定 |
+| N08 | 左右臂到达时间轻微不同步 | 两臂 GRASP 阶段夹爪闭合的时间偏差在容忍范围内 | ✅ `generate_n08_coordination`，**真实行为已接入** `MockSimAdapter`（`coordination_mode`/`phase_offset` 驱动夹爪闭合时序），语义参照 sim 端 `bimanual_controller.py` |
+| N09 | 工作空间边缘抓取 | 物体位置接近可达域边界但仍可达 | ✅ `generate_n09_workspace_edge`——**这是假定边界**（N02 范围的周界），不是真实可达域边界，见 sim_data_request_v1.md |
+| N10 | 接近路径靠近桌面但不发生碰撞 | 轨迹 clearance 小但保持在安全阈值之上 | ✅ `generate_n10_table_clearance`，⚠️ `approach_clearance_m` 目前只是采样/诊断字段，没有真正驱动轨迹形状（需要真实轨迹建模，超出当前范围） |
+
+N02-N10 全部用 `tests/test_n_family_sampling.py` 验证过：每个生成器产出的 episode 在
+`MockSimAdapter` 下都能正常走完、zero recovery（毕竟是"正常"类，不该触发异常）。**这只
+验证了控制流+参数范围本身不会导致我们自己代码报错，不代表这些范围在真实物理下就是
+"安全"的**——真实边界数据的收集状态见 `docs/sim_data_request_v1.md`。
 
 ## 2. Family R：Recovery（异常后恢复成功）
 

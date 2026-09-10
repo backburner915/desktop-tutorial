@@ -38,14 +38,16 @@ T03 场景坐标（见 `docs/scene_grounding_t03.md`）。现在卡住大批量�
 - [x] `IsaacLabR1Adapter` 真实实现合并、`--adapter isaaclab` CLI 接通
 - [x] 场景坐标用 sim 端真实数据校准（`docs/scene_grounding_t03.md`）
 - [x] **"目标环"缺口** ——按用户指示删除，已同步进代码和文档
-- [x] `coordination_mode`/`phase_offset` 字段补齐（沿用 sim 端 scenario schema 的字段名）——
-      **但 episode_runner.py 还没有真正按这两个字段驱动"双臂异步"行为**，目前只是数据结构
-      对齐了，N08/P24 的真实调度逻辑还是待办，见 `docs/sim_data_request_v1.md`
+- [x] `coordination_mode`/`phase_offset`：真实语义已从 sim 端确认（只有夹爪轴做 phase
+      shift，release 视为同步阶段）并接入 `MockSimAdapter`
+- [x] N02-N10：sim 端确认真实工作空间边界数据不存在，给了一份"临时采样约定"，已实现进
+      `episode_gen/n_family_sampling.py`（9个生成器 + CLI，`tests/test_n_family_sampling.py`
+      验证过），标注清楚是 fallback 不是标定结论
 - [ ] 物体身份最终确认（Crew Lock Bag vs 继续用 T01/T02/T03 占位）——不阻塞开工，先用占位物体
 - [ ] `r1_bimanual_dataset/config.py` 的 `DATASET_FPS=10.0` ——只影响那套独立
       pipeline，如果以后要接入这边框架才需要改
-- [ ] 拿到真实"可达工作空间范围"（不是单点坐标）后，补 N02-N10 的 yaml +
-      `batch_generate.py` 采样范围——**需要 sim 同学收集数据，见 `docs/sim_data_request_v1.md`**
+- [ ] （不阻塞）真实工作空间边界/抓取容差数据——等 sim 端以后有余力做真实标定扫描，再替换
+      `n_family_sampling.py` 里的临时数值，不用等这个才开工
 
 ### 阶段 1：在真 Isaac Sim 里跑通我们的 `EpisodeRunner`（对应 TRA-01"5条成功episode试采"）
 **门槛**：无（目标环缺口已解决）。现在就可以开始。
