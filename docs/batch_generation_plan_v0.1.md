@@ -1,10 +1,12 @@
 # 首次大批量数据生成计划 V0.1
 
-状态：草案。当前处于"框架就绪，等 sim 端 adapter 对齐"阶段。这份文档定义：
-① 大批量生成之前必须先完成什么（不能跳），② 对齐之后具体分几步跑、每步的
-验收门槛，③ 现在卡在哪一步、需要谁去推进。
+状态：草案，进度过半。之前"框架就绪、等 sim 端 adapter 对齐"这一步已经完成——
+`IsaacLabR1Adapter` 真实实现已合并、`--adapter isaaclab` 已在 `scripts/run_episode.py`/
+`run_batch.py` 里接通、`configs/scenarios/*.yaml` 已经从占位坐标换成 sim 端提供的真实
+T03 场景坐标（见 `docs/scene_grounding_t03.md`）。现在卡住大批量生成的**不再是代码/架构
+问题，是一个数据契约层面的真实缺口**，见下面 §1 最后一条。
 
-## 1. 现状盘点：本仓库范围内能做的已经做完
+## 1. 现状盘点
 
 | 项目 | 状态 |
 |---|---|
@@ -13,30 +15,44 @@
 | 数据契约 | ✅ TRA-01 已固化为 `docs/dataset_spec_v0.1.md` |
 | 编排框架（母脚本） | ✅ `episode_runner.py` + detectors/recovery/dataset_writer，见 `docs/architecture.md` |
 | 批量生成机制 | ✅ `batch_generate.py`（配置采样）+ `scripts/run_batch.py`（批量执行+汇总报告） |
-| N02-N10 具体配置 | ❌ 只有定义，没有 yaml（原因见下） |
+| `IsaacLabR1Adapter` 真实实现 | ✅ 已合并（约1400行，0处NotImplementedError），语法/接口验证过 |
+| `--adapter isaaclab` CLI 通路 | ✅ 已接通（`--env-factory module:function` 钩子） |
+| 场景坐标 | ✅ 已用 sim 端真实数据（preflight报告+真实成功episode）校准，不再是占位值 |
+| N02-N10 具体配置 | ❌ 只有定义，没有 yaml——需要真实"可达工作空间范围"（不是单点坐标），现在只有一个点样本，还不够定采样区间 |
 | P24 | ❌ 缺字段，做不了（见 taxonomy 文档 §4） |
+| **"放入绿色目标环"这个环节** | ❌ **未验证，甚至可能不存在**——sim 端近100条通过的测试，成功判据是 `{grasp,lift,hold,place,release}`，`place` 指放回支撑架，场景扫描里也没有任何叫"ring"的物体。这跟 TRA-01 冻结的任务文本（"place it in the green target ring"）不一致，见 `docs/scene_grounding_t03.md` |
 
-**唯一真正阻塞"大批量生成真实数据"的**：`IsaacLabR1Adapter` 还没有一个双方确认过、
-内部一致、可实际运行的版本（sim 端已经写了约1400行真实实现，但存在文件版本/
-目录结构/物体身份/帧率等需要先对齐的问题，见 `docs/architecture.md` 的记录）。
-N02-N10 的采样范围之所以还没写，是因为 `object_x/y/z` 这些数值要基于真实场景的
+**现在唯一真正阻塞"正式宣布可以大批量生成"的，是最后一条**——不是代码没写完，是
+"目标环"这个东西在真实场景里可能根本不存在，需要人去确认（找 sim 同学问场景里到底有
+没有、或者去问 VLA/老师那边"放入目标环"这个要求是否还成立），不是我能在代码层面解决的。
 可达工作空间来定，在场景坐标系确认前写了也是白写（这一点在 `docs/architecture.md`
 里也记录了：sim 端 preflight 报告里的真实物体坐标和我们占位值完全不是一个量级）。
 
 ## 2. 分阶段计划
 
-### 阶段 0（现在 → adapter 对齐前）：本仓库范围内能做的
+### 阶段 0（本仓库范围内能做的）
 - [x] taxonomy 定义、R11-R19/F01-F03/P21-P23 控制流实现+验证
-- [ ] 与 sim 同学对齐：哪些文件是当前有效版本、目录结构、物体身份（Crew Lock Bag
-      vs 占位正方体）、任务文本、帧率（sim 端目前是10Hz，需要改成TRA-01要求的30Hz）
-- [ ] 场景坐标系确定后，补 N02-N10 的 yaml + `batch_generate.py` 采样范围、补 P24
+- [x] `IsaacLabR1Adapter` 真实实现合并、`--adapter isaaclab` CLI 接通
+- [x] 场景坐标用 sim 端真实数据校准（`docs/scene_grounding_t03.md`）
+- [ ] **"目标环"缺口需要人来确认**（不是代码任务，见 §1 最后一条）
+- [ ] 物体身份最终确认（Crew Lock Bag vs 继续用 T01/T02/T03 占位）
+- [ ] `r1_bimanual_dataset/config.py` 的 `DATASET_FPS=10.0` ——只影响那套独立
+      pipeline，如果以后要接入这边框架才需要改
+- [ ] 拿到真实"可达工作空间范围"（不是单点坐标）后，补 N02-N10 的 yaml +
+      `batch_generate.py` 采样范围、补 P24
 
-### 阶段 1：Adapter 接通，试跑最小闭环（对应 TRA-01"5条成功episode试采"）
-**门槛**：`IsaacLabR1Adapter` 合并完成、`py_compile` 通过、能在真实 Isaac Sim 里
-`reset()`+`step()` 跑通不报错。
+### 阶段 1：在真 Isaac Sim 里跑通我们的 `EpisodeRunner`（对应 TRA-01"5条成功episode试采"）
+**门槛**：目标环缺口已有明确结论（要么场景里确实有、给出坐标；要么正式决定
+这阶段不做目标环，退回"抓起→稳定→放下"）。
 
-1. 用 `configs/scenarios/n01_nominal.yaml`（物体坐标先按真实场景更新）+
-   `scripts/run_episode.py --adapter isaaclab` 跑1条
+**当前状态**：sim 端近100条测试证明的是"抓取-抬升-保持-放置-松开"这条链路在真实物理下
+成立，但走的还不完全是我们 `EpisodeRunner` 的状态机+detectors+recovery 这条路径
+（用户确认是"两者结合"使用的，具体多少条走了我们的框架、多少条走的是他们自己的
+`r1_bimanual_dataset` pipeline，还没细分）。阶段1要做的，是**明确用我们的 CLI**把
+这条路径完整跑一遍：
+
+1. 用 `configs/scenarios/n01_nominal.yaml`（坐标已更新为真实值）+
+   `scripts/run_episode.py --adapter isaaclab --env-factory <sim同学的bootstrap模块>:build_env` 跑1条
 2. **人工看**（不能只看程序返回 `success=True`）：`episode.jsonl` 的图像是不是
    真的渲染出来了、分辨率对不对、`qpos` 数值是不是在合理范围内变化（不是像
    `MockSimAdapter` 那样全程不动）
