@@ -53,22 +53,26 @@ RESET → PREGRASP → APPROACH → CONTACT_CHECK → GRASP → LIFT → HOLD
 | R12 | 接触物体错误表面（wrong_surface_contact） | phase==APPROACH/CONTACT_CHECK 且 `contact(arm, object)==True` 且 grasp 对齐误差 > 阈值 | 松开 → 后退 → 调整 `grasp_offset` → 重新 APPROACH | ✅ 优先 |
 | R13 | 单侧夹爪抓住（single_side_grasp） | phase==GRASP 结束时仅一侧 `grip_force(arm) > f_min` | 保持已抓侧 / 视 config 决定是否释放 → 未成功侧单独重新 APPROACH | ✅ 优先 |
 | R14 | 两臂互撞（arm_arm_collision） | 任意阶段 `contact(left_link, right_link)==True` | 双臂同时 RETREAT → 增大 `approach_offset` 后重新规划双侧轨迹 | ✅ 优先 |
-| R15 | 夹爪打滑（grip_slip） | phase==LIFT/HOLD 且 object 相对 gripper 的位移持续增长 | 降低/松开 → 回 GRASP 前重新夹紧 | 待排期 |
-| R16 | 物体被推走（object_displaced） | phase==APPROACH 且 `object_pose` 偏离初始目标 > 阈值 | 用当前 `object_pose` 重新计算 grasp frame → 重新 APPROACH | 待排期 |
-| R17 | 接近但无法到达（stalled_approach） | phase==APPROACH 且 `position_error` 在 `T_stall` 内未下降 | 回 PREGRASP → 更换 `approach_angle` | 待排期 |
-| R18 | 关节接近极限（joint_limit_margin） | 任意阶段 `min(joint_limit_margin) < margin_min` | RETREAT → 选择备选姿态/IK 解 | 待排期 |
-| R19 | 抬升失败（lift_failed） | phase==LIFT 且 gripper closed 但 object 未随之上升 | 松开 → 重新 GRASP | 待排期 |
-| R20 | 恢复超限（recovery_exhausted） | `recovery_count > max_recovery_attempts`（由 `RecoveryManager` 统一判定，不是单独检测器） | 终止 episode，标记为 F 类 failure，`failure_reason="recovery_exhausted"` | ✅ 首批实现（兜底逻辑） |
+| R15 | 夹爪打滑（grip_slip） | phase==LIFT/HOLD 且 object 相对 gripper 的位移持续增长 | 降低/松开 → 回 GRASP 前重新夹紧 | ✅ 已实现 |
+| R16 | 物体被推走（object_displaced） | phase==APPROACH 且 `object_pose` 偏离初始目标 > 阈值 | 用当前 `object_pose` 重新计算 grasp frame → 重新 APPROACH | ✅ 已实现 |
+| R17 | 接近但无法到达（stalled_approach） | phase==APPROACH 且 `position_error` 在 `T_stall` 内未下降 | 回 PREGRASP → 更换 `approach_angle` | ✅ 已实现 |
+| R18 | 关节接近极限（joint_limit_margin） | 任意阶段 `min(joint_limit_margin) < margin_min` | RETREAT → 选择备选姿态/IK 解 | ✅ 已实现 |
+| R19 | 抬升失败（lift_failed） | phase==LIFT 且 gripper closed 但 object 未随之上升 | 松开 → 重新 GRASP | ✅ 已实现 |
+| R20 | 恢复超限（recovery_exhausted） | `recovery_count > max_recovery_attempts`（由 `RecoveryManager` 统一判定，不是单独检测器） | 终止 episode，标记为 F 类 failure，`failure_reason="recovery_exhausted"` | ✅ 已实现（兜底逻辑，所有R类共用） |
+
+R11-R19 均已在 `episode_gen/detectors.py`/`recovery.py` 中实现，并用 `MockSimAdapter` 各自验证过"检测→RETREAT→调整参数重试→成功"闭环（`tests/test_r11_recovery_loop.py`、`tests/test_r15_r19_and_f02.py`）。**这只验证了控制流正确性，不是物理仿真**——真实数据要等 `IsaacLabR1Adapter` 接入真实 Isaac Sim 后才能产出，见 `docs/architecture.md`。
 
 ## 3. Family F：Failure（最终失败）
 
 不是"随便让它撞烂"，而是 R 类恢复升级失败时的落地状态，或直接判定为不可恢复的异常。
 
-| ID | 定义 |
-|---|---|
-| F01 | 任一 R-family 异常触发 `recovery_count > max_recovery_attempts`（对应 R20） |
-| F02 | 恢复过程中触发第二类不同的异常（如 R11 恢复中又发生 R14） |
-| F03 | episode 超时（`time_out`）仍未完成 GRASP |
+| ID | 定义 | 实现状态 |
+|---|---|---|
+| F01 | 任一 R-family 异常触发 `recovery_count > max_recovery_attempts`（对应 R20） | ✅ 已实现（`RecoveryManager`） |
+| F02 | 恢复过程中触发第二类不同的异常（如 R11 恢复中又发生 R14） | ✅ 已实现（`scenario.secondary_anomaly` + `episode_runner.py` 只在 `recovery_count>0` 后检查，命中直接 FAILURE，不重试） |
+| F03 | episode 超时（`time_out`）仍未完成 GRASP | ✅ 已实现（`adapter.check_timeout`） |
+
+三类都已经有单测覆盖（`tests/test_r11_recovery_loop.py::test_recovery_exhausted_becomes_failure`、`tests/test_r15_r19_and_f02.py::TestF02CompoundFailure`）。
 
 Failure 数据单独落盘（按 TRA-01 §8），默认不进首轮 SFT。`failure_type`/`failure_phase`/`object_pose`/`object_velocity`/`left_contact`/`right_contact`/`left_grasp_error`/`right_grasp_error` 必须记录在 diagnostics 里。
 
@@ -76,12 +80,14 @@ Failure 数据单独落盘（按 TRA-01 §8），默认不进首轮 SFT。`failu
 
 在 N 的参数分布基础上取到边界值，但不引入检测器意义上的"异常"——用于测试正常路径在极限条件下的鲁棒性。
 
-| ID | 条件 |
-|---|---|
-| P21 | `pregrasp_distance` 取分布下限 |
-| P22 | `approach_angle` 取分布边界 |
-| P23 | 物体姿态旋转取边界值（仍在可抓取范围内） |
-| P24 | 双臂时间不同步取容忍上限（N08 的边界版） |
+| ID | 条件 | 实现状态 |
+|---|---|---|
+| P21 | `pregrasp_distance` 取分布下限 | ✅ 已实现（`configs/scenarios/p21_min_pregrasp_distance.yaml`） |
+| P22 | `approach_angle` 取分布边界 | ✅ 已实现（`p22_max_approach_angle.yaml`） |
+| P23 | 物体姿态旋转取边界值（仍在可抓取范围内） | ✅ 已实现（`p23_max_object_rotation.yaml`） |
+| P24 | 双臂时间不同步取容忍上限（N08 的边界版） | ❌ 未实现——`ScenarioConfig` 目前没有"左右臂到达时间偏差"这个字段，N08 本身也还没做，做不了 P24 的边界版。需要先给 N08 设计好怎么表示时序偏差（比如给 `left_start_pose`/`right_start_pose` 配一个独立的阶段起始延迟），P24 才有意义，不是简单加一份 yaml 能解决的 |
+
+P21-P23 都用 `MockSimAdapter` 验证过：边界参数下 episode 应该正常走完、零 recovery（`tests/test_r15_r19_and_f02.py::TestPerturbationScenarios`）。
 
 ## 5. Scenario ID → Config 映射
 
@@ -89,5 +95,7 @@ Failure 数据单独落盘（按 TRA-01 §8），默认不进首轮 SFT。`failu
 
 ## 6. 待确认 / 后续排期
 
-- R15-R19、F02、P21-P24：等 R11-R14 的检测器/恢复闭环在真实 Isaac Sim 中跑通验收后再排期实现，避免在没有物理引擎验证的情况下堆参数。
+- ~~R15-R19、F02、P21-P23：等 R11-R14 验收后再排期~~ 已完成（控制流层面，`MockSimAdapter` 验证过）。taxonomy 里定义的 N/R/F/P 四类，除 N02-N10（还没写对应 yaml，只有 N01）和 P24（缺少字段，见上）之外，已经全部有检测器/恢复逻辑 + config + 单测覆盖。
 - 障碍物/柜体等碰撞面的 taxonomy 扩展（R11 的"闭包"能力）依赖场景 USD 里实际有哪些可碰撞物体，待场景文件同步后补齐 `surface` 枚举。
+- **物体身份还未最终确认**：本文档和现有 `configs/scenarios/*.yaml` 里的"物体"仍然是 TRA-01 定义的 Crew Lock Bag 占位坐标；sim 端目前在真实 Isaac Sim 里用的是不带抓取点的占位正方体（T01/T03），坐标系也完全不同（详见 `docs/architecture.md` 的分支整合记录）。这批 R11-R19/P21-P23 的 config 在物体坐标、grasp offset 数值上都是占位值，等 sim 端场景对齐后需要重新核对是否需要调整数值——但检测器/恢复逻辑本身（判定的是相对量：距离阈值、力阈值、余量阈值）不需要跟着改。
+- N02-N10：目前 taxonomy 里只有定义，还没有对应的 `configs/scenarios/*.yaml` 和采样范围（`batch_generate.py` 目前只给 R11 写了默认采样区间）。等物体坐标系确定后一起补，不然采样范围又是占位数字。

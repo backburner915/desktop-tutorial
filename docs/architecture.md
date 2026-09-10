@@ -21,8 +21,8 @@ episode 重写的那个核心到底是哪个？" 直接给结论，再逐层说�
 | 编排/母脚本 | `episode_runner.py` | 状态机主循环，对所有 episode 通用 | ✅ 完成，单测覆盖 |
 | 阶段定义 | `fsm.py` | 12 个 Phase + 顺序表，对所有 episode 通用 | ✅ 完成 |
 | 配置 | `scenario.py` | `ScenarioConfig`/`AnomalyConfig` 数据结构 + yaml 读写 | ✅ 完成 |
-| 异常检测 | `detectors.py` | R11-R14 四个判定函数 | ⚠️ 只实现了 4/10 个R类（R15-R20 排期中，见 taxonomy 文档） |
-| 恢复策略 | `recovery.py` | 通用的重试次数/超限判定 + 4 个 class 专属的参数调整逻辑 | ⚠️ 同上，框架通用，具体调整逻辑只写了 4 类 |
+| 异常检测 | `detectors.py` | R11-R19 九个判定函数 + F02 二次异常检测 | ✅ taxonomy里定义的R类已全部实现，控制流层面单测覆盖 |
+| 恢复策略 | `recovery.py` | 通用的重试次数/超限判定 + 9 个 class 专属的参数调整逻辑 | ✅ 同上 |
 | 数据落盘 | `dataset_writer.py` | 按 TRA-01 写 policy/diagnostics 两路 | ✅ 结构完成；⚠️ 目前是 JSONL 占位，真实 LeRobotDataset(视频编码+parquet) 未接 |
 | 仿真适配 | `sim_adapter.py::MockSimAdapter` | 纯 Python 假仿真，只为测试母脚本逻辑 | ✅ 完成（但这不是最终产物） |
 | 仿真适配 | `sim_adapter.py::IsaacLabR1Adapter` | 真正接 Isaac Sim、驱动真机器人 | ❌ 骨架，未实现，见 `sim_adapter_handoff.md` |
@@ -70,5 +70,35 @@ scripts/run_batch.py 循环读取每份config
   的真实数据。这一层等 `IsaacLabR1Adapter` 接完才算完成，这是当前最大的缺口。
 
 所以"脚本还没到母脚本的程度，需要完善"这句话，准确的说法是："母脚本（编排逻辑）已经
-写完并且验证了内部一致性；缺的是驱动真实物理的执行层，以及把已实现的4类异常扩展到
-taxonomy里定义的全部类别"——不是编排逻辑本身需要推倒重做。
+写完并且验证了内部一致性；缺的是驱动真实物理的执行层"——不是编排逻辑本身需要推倒重做。
+截至目前 taxonomy 定义的 R11-R19、F01-F03、P21-P23 在控制流层面（`MockSimAdapter`）
+均已实现并有单测覆盖，见 `docs/scenario_taxonomy_v0.1.md` 的实现状态列。
+
+## sim 端分支整合情况（2026-09-10 记录）
+
+sim 同学把本地工作目录打包上传到了 `sim端同步` 分支（`git fetch` 才能看到，默认
+clone 不带）。检查后发现：
+
+- **不是另起炉灶**：`episode_runner.py`/`scenario.py` 内容和我们这边基本一致，说明
+  是在我们的框架基础上做的，不是平行设计。
+- **`IsaacLabR1Adapter` 已经从骨架写成了约1400行的真实实现**（配套 `robot_interface.py`
+  726行），控制方式是阻尼最小二乘 Jacobian IK + 关节空间轨迹执行，抓取点从物体
+  bbox 在局部坐标系里现算——这条路子和我们最初设计的"bbox→grasp frame"是一致的。
+- **上传方式导致目录结构被拉平**：92个文件都在仓库根目录，没有 `episode_gen/`
+  文件夹。但 `sim_adapter.py` 内部的 import 语句仍然是 `from episode_gen.xxx import
+  yyy`，说明这大概率是上传方式（网页拖拽）把文件夹层级弄丢了，不是故意改的设计。
+  **已确认的合并方向：sim 端后续改成我们这边的 package 结构**，双方后续都用
+  `git push` 保留分支历史，不再用整体打包上传。
+- **上传内容内部不完全一致**：例如 `sim_adapter.py` 引用
+  `from episode_gen.types import Observation`，但同一次上传里的 `types.py` 并没有
+  `Observation` 这个类，定义的是另一套字段完全不同的类（`Phase`/`Outcome`/`Pose`/
+  `NominalGrasp`/`EpisodeResult`）。大概率是把开发过程中不同阶段的文件一起打包
+  上传了（那一堆 `calibrate_*`/`probe_*`/`audit_*` 脚本也印证这点，都是调试期间
+  的一次性脚本）。**在双方确认清楚哪些文件是当前有效版本之前，不要贸然自动合并**
+  ——正在跟 sim 同学对齐这件事，见任务 #13。
+- **和当前 taxonomy/dataset_spec 有实质冲突、需要澄清的点**：sim 端 `config.py` 里
+  `DATASET_FPS = 10.0`（TRA-01 要求30Hz）；目标物体是占位正方体 T01/T03，不是
+  Crew Lock Bag（据用户确认：这批占位物体本身没有设计抓取点，用于先跑通pipeline
+  机制，不是最终任务定义）；任务文本也是占位通用句，不是 TRA-01 冻结的那句。这些
+  在合并真实 adapter 代码之前需要先谈清楚，不然合并进来的坐标系/契约细节可能是
+  错的。
