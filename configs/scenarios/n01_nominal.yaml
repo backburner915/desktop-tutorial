@@ -5,9 +5,9 @@ seed: 1
 task_text: "Pick up the Crew Lock Bag with both arms and place it in the green target ring."
 control_hz: 30.0
 
-object_x: 0.40
-object_y: 0.00
-object_z: 1.00
+object_x: -2.65    # T03 bbox center, see docs/scene_grounding_t03.md
+object_y: 3.85
+object_z: 0.637
 object_roll: 0.0
 object_pitch: 0.0
 object_yaw: 0.0
@@ -19,12 +19,12 @@ left_grasp_offset: [0.0, 0.0, 0.0]
 right_grasp_offset: [0.0, 0.0, 0.0]
 left_approach_angle: 0.0
 right_approach_angle: 0.0
-pregrasp_distance: 0.15
+pregrasp_distance: 0.1   # matches reference/scenario_t03.json
 
 lift_direction: [0.0, 0.0, 1.0]
-lift_height: 0.15
+lift_height: 0.12        # matches reference/scenario_t03.json lift_vector
 hold_duration_s: 1.0
 
-target_ring_pose: [0.55, 0.35, 1.00]
+target_ring_pose: [-2.633, 3.506, 1.429]  # NOT a verified ring - real "place" coord from a tested episode, see docs/scene_grounding_t03.md
 
 anomaly: null

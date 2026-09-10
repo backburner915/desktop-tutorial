@@ -1548,6 +1548,7 @@ class MockSimAdapter(SimAdapter):
         self._secondary_fault_already_used = False
         self._qpos = list(DEFAULT_QPOS_VEC)
         self._gripper_close_steps = 0
+        self._nominal_object_pos: tuple[float, float, float] = (0.4, 0.0, 1.0)
 
     def reset(self, scenario: ScenarioConfig) -> Observation:
         self._t = 0.0
@@ -1559,6 +1560,11 @@ class MockSimAdapter(SimAdapter):
         self._secondary_fault_already_used = False
         self._qpos = list(DEFAULT_QPOS_VEC)
         self._gripper_close_steps = 0
+        # scenario-grounded, not a hardcoded placeholder — R16 (and the
+        # default reported object_pos below) must displace *relative to
+        # wherever this scenario's object actually is, whatever scene it's
+        # calibrated against.
+        self._nominal_object_pos = (scenario.object_x, scenario.object_y, scenario.object_z)
         return self._observe(dist=1.0, contacts=set(), extra={})
 
     # scenario classes whose fault signature fires during APPROACH and is
@@ -1586,7 +1592,8 @@ class MockSimAdapter(SimAdapter):
             contacts_add.add(("left_arm_link6", "right_arm_link6"))
         elif an.scenario_class == "R16":
             threshold = an.extra.get("displacement_threshold_m", 0.05)
-            extra_add["_object_pos_override"] = (0.40 + threshold + 0.05, 0.0, 1.0)
+            nx, ny, nz = self._nominal_object_pos
+            extra_add["_object_pos_override"] = (nx + threshold + 0.05, ny, nz)
         elif an.scenario_class == "R17":
             stall_max = an.extra.get("stall_time_s", 1.0)
             for arm in arms:
@@ -1700,13 +1707,14 @@ class MockSimAdapter(SimAdapter):
         joint_limit_margin = {j: 1.0 for j in JOINT_ORDER}
         if joint_margin_override:
             joint_limit_margin.update(joint_margin_override)
+        nx, ny, nz = self._nominal_object_pos
         return Observation(
             t=self._t,
             qpos=list(self._qpos),
             qvel=[0.0] * len(JOINT_ORDER),
-            left_ee_pos=(0.4 - dist, 0.2, 1.0),
-            right_ee_pos=(0.4 - dist, -0.2, 1.0),
-            object_pos=object_pos_override or (0.4, 0.0, 1.0),
+            left_ee_pos=(nx - dist, ny + 0.2, nz),
+            right_ee_pos=(nx - dist, ny - 0.2, nz),
+            object_pos=object_pos_override or self._nominal_object_pos,
             contacts=contacts,
             dist_to_grasp_frame={"left": dist, "right": dist},
             grip_force=grip_force or {"left": 0.0, "right": 0.0},
