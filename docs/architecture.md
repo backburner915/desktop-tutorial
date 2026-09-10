@@ -25,7 +25,7 @@ episode 重写的那个核心到底是哪个？" 直接给结论，再逐层说�
 | 恢复策略 | `recovery.py` | 通用的重试次数/超限判定 + 9 个 class 专属的参数调整逻辑 | ✅ 同上 |
 | 数据落盘 | `dataset_writer.py` | 按 TRA-01 写 policy/diagnostics 两路 | ✅ 结构完成；⚠️ 目前是 JSONL 占位，真实 LeRobotDataset(视频编码+parquet) 未接 |
 | 仿真适配 | `sim_adapter.py::MockSimAdapter` | 纯 Python 假仿真，只为测试母脚本逻辑 | ✅ 完成（但这不是最终产物） |
-| 仿真适配 | `sim_adapter.py::IsaacLabR1Adapter` | 真正接 Isaac Sim、驱动真机器人 | ❌ 骨架，未实现，见 `sim_adapter_handoff.md` |
+| 仿真适配 | `sim_adapter.py::IsaacLabR1Adapter` | 真正接 Isaac Sim、驱动真机器人 | ⚠️ 代码已合并（sim同学的真实实现，约1400行，0处NotImplementedError，接口/成功判据都对得上我们的契约），但**还没在真 Isaac Sim 里跑通验证过**，只确认了语法和接口层面正确 |
 | 批量配置 | `batch_generate.py` | 从一份基准 yaml 采样出很多变体 yaml（**不是母脚本，是配置工厂**） | ✅ 完成 |
 | CLI 入口 | `scripts/run_episode.py` / `run_batch.py` | 调 `EpisodeRunner`，串起 config→adapter→输出 | ✅ 完成 |
 
@@ -102,3 +102,50 @@ clone 不带）。检查后发现：
   机制，不是最终任务定义）；任务文本也是占位通用句，不是 TRA-01 冻结的那句。这些
   在合并真实 adapter 代码之前需要先谈清楚，不然合并进来的坐标系/契约细节可能是
   错的。
+
+### 更新（用户提供了 sim 端本地打包的完整文件夹后）
+
+用户把 sim 同学本地实际使用的文件夹打包发了过来（不是 GitHub 网页上传那份），
+里面是**两个独立的顶层目录**，跟用户此前的描述完全对得上：
+
+- `desktop-tutorial/` —— 就是我们这个仓库的一份 checkout，`episode_gen/` 下除
+  `sim_adapter.py` 外的文件都和我们当时（约 09-07）的版本逐字节一致（`fsm.py`/
+  `dataset_writer.py`/`types.py`/`__init__.py`/`batch_generate.py` 完全相同，
+  `scenario.py`/`detectors.py`/`recovery.py`/`episode_runner.py` 的差异就是我们后来
+  加的 R15-R19/F02，不是冲突）。**之前"types.py 缺 Observation 类"那个疑点已经
+  排除**——那是 GitHub 网页整体上传时把这个目录和下面的 `r1_bimanual_dataset/`
+  目录混到了同一层级，导致 `r1_bimanual_dataset/core/types.py`（另一个模块，
+  刚好也叫 `types.py`）和这边的 `sim_adapter.py` 被误判成引用同一个文件。有正确
+  目录结构后两边互不冲突。
+- `r1_bimanual_dataset/` —— sim 同学自己原生的、独立组织良好的代码库（`core/`
+  真实机器人接口层、`behaviors/` 抓取行为脚本、`tools/` 几十个标定/探测脚本、
+  `reports/` 实测 JSON、`assets/`+`Axis_Aligned/` 真实 USD 物体文件如
+  `003_cracker_box.usd`/`004_sugar_box.usd`）。这是他们独立于我们框架、自己摸索出来
+  的一整套物理验证工具链，`DATASET_FPS=10.0` 和占位物体/占位任务文本都在这个目录
+  下的 `config.py` 里，跟我们的 `desktop-tutorial/` 拷贝没有关系。
+
+**`desktop-tutorial/episode_gen/sim_adapter.py` 里的 `IsaacLabR1Adapter` 已经从骨架
+写成了约1400行的真实实现，而且是干净的、能直接对上我们接口的版本**（不是这次
+才发现有问题的那份拼接文件）。核对确认：
+
+- `SimAdapter` 抽象基类逐字节和我们现在的版本一致，接口没有漂移
+- 全篇 0 处 `NotImplementedError`，`reset`/`step`/`render_cameras`/
+  `check_place_success`/`check_timeout` 全部有真实实现
+- `check_place_success` 逐条对应 `docs/dataset_spec_v0.1.md` §6 的成功判据
+  （双侧有效夹持、物体离开支撑面、未掉落、进入目标区域、完成释放、释放后稳定）
+- 对 `omni`/`isaacsim`/`pxr`/`torch` 全部用函数内 `try/except` 做懒加载，模块本身
+  在没装 Isaac Sim 的环境里也能安全 `import`（这也是为什么在这个沙箱里
+  `py_compile` 能过）
+- 抓取点计算、碰撞命名归一化等多处逻辑同时兼容 `crew_lock_bag`/`bag` 和 T01/T03
+  两种物体命名，不是写死只认 T01/T03
+
+**已经把这份真实实现合并进了 `episode_gen/sim_adapter.py`**（保留我们更新过的
+`MockSimAdapter`，只换 `IsaacLabR1Adapter` 和它依赖的常量块），`py_compile` 通过，
+11 个既有单测全部仍然通过（这些测试走的是 MockSimAdapter 路径，没有实际用到新
+合并的真实 adapter，所以"测试通过"只说明合并没有破坏现有逻辑，**不代表这份真实
+adapter 在真 Isaac Sim 里能跑通**——这一步仍然需要 sim 同学在他们的机器上验证）。
+
+仍然没解决、需要 sim 同学确认的：`r1_bimanual_dataset/config.py` 的
+`DATASET_FPS=10.0` 和占位任务文本——但这些在**另一个独立目录**里，不影响已经
+合并进来的 `IsaacLabR1Adapter`；只有当 sim 同学决定把 `r1_bimanual_dataset/` 的
+批量采集流程也接入这边时，才需要把这两个数字改成 TRA-01 要求的值。
