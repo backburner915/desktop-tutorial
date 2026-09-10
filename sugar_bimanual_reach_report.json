@@ -1,0 +1,99 @@
+{
+  "report_version": "r1-sugar-bimanual-reach-v1",
+  "source_usd_modified": false,
+  "table_moved": false,
+  "target": {
+    "target_path": "/World/R1DatasetOverlay/TargetPose/SugarBox",
+    "asset_url": "C:\\Users\\许久轻\\Documents\\ChatGPT\\通信\\r1_bimanual_dataset\\assets\\004_sugar_box_physics.usd",
+    "asset_source_url": "https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Props/YCB/Axis_Aligned_Physics/004_sugar_box.usd",
+    "bbox_min_m": [
+      -3.2463381995334135,
+      3.7618732281355585,
+      1.0019999935925006
+    ],
+    "bbox_max_m": [
+      -3.153660870634149,
+      3.938126686033755,
+      1.047134131644648
+    ],
+    "dimensions_m": [
+      0.09267732889926439,
+      0.17625345789819669,
+      0.0451341380521475
+    ],
+    "table_top_z_m": 0.9999999935925006,
+    "bottom_clearance_m": 0.0020000000000000018
+  },
+  "base_placement": {
+    "object_center": [
+      -3.2,
+      3.85,
+      0.545
+    ],
+    "object_dimensions": [
+      1.65,
+      0.55,
+      0.07
+    ],
+    "lateral_bbox_axis": "x",
+    "base_forward_axis": "y",
+    "side": "near",
+    "stand_off_m": 0.78,
+    "base_position": [
+      -3.2,
+      3.07,
+      0.0
+    ],
+    "base_quaternion_wxyz": [
+      0.707107,
+      0.0,
+      0.0,
+      0.707107
+    ]
+  },
+  "fixed_root": "/World/garobot2_driveable_final/r1_DVT_colored",
+  "tcp": {
+    "upstream_link6_tip_offset_m": 0.15,
+    "measured_finger_midpoint_offset_m": 0.0369
+  },
+  "pregrasp_targets_m": {
+    "left": [
+      -3.2450527489084493,
+      3.8346291279431033,
+      1.161275358856647
+    ],
+    "right": [
+      -3.1550527489084494,
+      3.8346291279431033,
+      1.161275358856647
+    ]
+  },
+  "reached_finger_midpoints_m": {
+    "left": [
+      -3.32807993888855,
+      3.6834062337875366,
+      1.2641788125038147
+    ],
+    "right": [
+      -3.0697848796844482,
+      3.684598445892334,
+      1.265166997909546
+    ]
+  },
+  "pregrasp_midpoint_error_m": {
+    "left": 0.20087558031102792,
+    "right": 0.20142812053861361
+  },
+  "contact_at_pregrasp": {
+    "left": false,
+    "right": false,
+    "pairs": {
+      "left": [],
+      "right": []
+    }
+  },
+  "gripper_closed": false,
+  "payload_moved": false,
+  "result": "FAIL",
+  "meaning": "two-arm pregrasp workspace map only; this is not a grasp or a lift"
+}

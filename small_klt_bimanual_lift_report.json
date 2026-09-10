@@ -1,0 +1,74 @@
+{
+  "report_version": "r1-small-klt-bimanual-lift-v1",
+  "meaning": "physical close/lift/hold only; no attachment, carry, place, or data",
+  "source_usd_modified": false,
+  "table_moved": false,
+  "payload_attachment": false,
+  "collision_filters_changed": false,
+  "runtime_joint_lock": false,
+  "target": {
+    "target_path": "/World/R1DatasetOverlay/TargetPose/PhysicalTarget",
+    "asset_url": "D:\\Galaxea_Lab-galaxea-main\\Galaxea_Lab-galaxea-main\\source\\extensions\\omni.isaac.lab_assets\\data\\Props\\KLT_Bin\\small_KLT.usd",
+    "asset_source_url": null,
+    "bbox_min_m": [
+      -3.4224760401624614,
+      3.5766179073307884,
+      1.120999987512827
+    ],
+    "bbox_max_m": [
+      -2.9775239895735535,
+      3.8733820926692104,
+      1.3405398688374652
+    ],
+    "dimensions_m": [
+      0.44495205058890797,
+      0.29676418533842197,
+      0.2195398813246383
+    ],
+    "table_top_z_m": 1.118999987512827,
+    "bottom_clearance_m": 0.0020000000000000018
+  },
+  "initial_object_position_m": [
+    -3.1999852657318115,
+    3.724956750869751,
+    1.2299883365631104
+  ],
+  "pre_lift_object_position_m": [
+    -3.1999659538269043,
+    3.7248191833496094,
+    1.2299901247024536
+  ],
+  "final_object_position_m": [
+    -3.1149301528930664,
+    3.7491812705993652,
+    1.3158066272735596
+  ],
+  "final_object_quaternion_wxyz": [
+    0.7828579968466967,
+    -0.26543690209850374,
+    0.30594463811142586,
+    0.4723076181773859
+  ],
+  "final_object_velocity_m_rad_s": [
+    -0.001009016647003591,
+    0.005399089306592941,
+    0.004453993868082762,
+    -0.0037476327270269394,
+    -0.028896482661366463,
+    0.008129154331982136
+  ],
+  "lift_from_close_m": 0.08581650257110596,
+  "lift_from_initial_m": 0.08581829071044922,
+  "close_contact_steps": {
+    "left": 150,
+    "right": 150,
+    "both": 150
+  },
+  "lift_hold_contact_steps": {
+    "left": 300,
+    "right": 300,
+    "both": 300
+  },
+  "finite": true,
+  "result": "PASS"
+}

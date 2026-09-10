@@ -1,0 +1,25 @@
+{
+  "target_path": "/World/R1DatasetOverlay/TargetPose/SugarBox",
+  "asset_url": "C:\\Users\\许久轻\\Documents\\ChatGPT\\通信\\r1_bimanual_dataset\\assets\\004_sugar_box_physics.usd",
+  "asset_source_url": "https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Props/YCB/Axis_Aligned_Physics/004_sugar_box.usd",
+  "bbox_min_m": [
+    -3.7963381995334133,
+    3.7618732281355585,
+    0.5820000001490115
+  ],
+  "bbox_max_m": [
+    -3.703660870634149,
+    3.938126686033755,
+    0.627134138201159
+  ],
+  "dimensions_m": [
+    0.09267732889926439,
+    0.17625345789819669,
+    0.0451341380521475
+  ],
+  "table_top_z_m": 0.5800000001490115,
+  "bottom_clearance_m": 0.0020000000000000018,
+  "source_target_hidden_session_only": "/World/TaskSetup/MovablePayloads/T01",
+  "table_moved": false,
+  "source_usd_modified": false
+}
