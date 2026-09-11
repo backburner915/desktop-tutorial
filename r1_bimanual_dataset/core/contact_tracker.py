@@ -35,13 +35,43 @@ class ContactWatchUnresolvedError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class ContactPair:
+    """One raw PhysX contact with its authoritative configured roots.
+
+    PhysX may identify a collision proxy below a link rather than the link
+    prim itself. ``query_root`` and ``counterpart_root`` are therefore the
+    frozen watch-spec roots, never inferred later from raw body path names.
+    """
+
+    query_body: str
+    counterpart_body: str
+    query_root: str
+    counterpart_root: str
+
+    def as_dict(self) -> dict[str, str]:
+        return {
+            "query_body": self.query_body,
+            "counterpart_body": self.counterpart_body,
+            "query_root": self.query_root,
+            "counterpart_root": self.counterpart_root,
+        }
+
+
+@dataclass(frozen=True)
 class ContactSample:
     left: bool
     right: bool
-    pairs: dict[str, list[tuple[str, str]]]
+    pairs: dict[str, list[ContactPair]]
 
     def as_dict(self) -> dict[str, object]:
-        return {"left": self.left, "right": self.right, "pairs": self.pairs}
+        return {
+            "left": self.left,
+            "right": self.right,
+            "pairs": {
+                name: [pair.as_dict() for pair in pairs]
+                for name, pairs in self.pairs.items()
+            },
+        }
 
 
 def t03_contact_watch_specs(
@@ -228,19 +258,46 @@ class GripperContactTracker:
 
         self._interface = _sensor.acquire_contact_sensor_interface()
 
-    def _watch_pairs(self, spec: ContactWatchSpec) -> list[tuple[str, str]]:
+    def _watch_pairs(self, spec: ContactWatchSpec) -> list[ContactPair]:
         assert self._interface is not None
-        found: set[tuple[str, str]] = set()
+        found: set[ContactPair] = set()
         for query_path in self._query_paths[spec.name]:
             for contact in self._interface.get_rigid_body_raw_data(query_path):
                 body0 = self._interface.decode_body_name(contact["body0"])
                 body1 = self._interface.decode_body_name(contact["body1"])
-                if any(
-                    self._under(body0, root) or self._under(body1, root)
-                    for root in spec.counterpart_roots
-                ):
-                    found.add((body0, body1))
-        return sorted(found)
+                for query_root in spec.query_roots:
+                    for counterpart_root in spec.counterpart_roots:
+                        if self._under(body0, query_root) and self._under(
+                            body1, counterpart_root
+                        ):
+                            found.add(
+                                ContactPair(
+                                    query_body=body0,
+                                    counterpart_body=body1,
+                                    query_root=query_root,
+                                    counterpart_root=counterpart_root,
+                                )
+                            )
+                        elif self._under(body1, query_root) and self._under(
+                            body0, counterpart_root
+                        ):
+                            found.add(
+                                ContactPair(
+                                    query_body=body1,
+                                    counterpart_body=body0,
+                                    query_root=query_root,
+                                    counterpart_root=counterpart_root,
+                                )
+                            )
+        return sorted(
+            found,
+            key=lambda pair: (
+                pair.query_root,
+                pair.counterpart_root,
+                pair.query_body,
+                pair.counterpart_body,
+            ),
+        )
 
     def sample(self) -> ContactSample:
         if self._interface is None:

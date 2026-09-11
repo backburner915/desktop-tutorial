@@ -16,6 +16,7 @@ from typing import Any
 from episode_gen.fsm import Phase
 from episode_gen.scenario import JOINT_ORDER, ScenarioConfig
 from episode_gen.types import Observation
+from r1_bimanual_dataset.core.contact_tracker import ContactSample
 
 CAMERA_NAMES = ("front", "left_wrist", "right_wrist")
 
@@ -66,6 +67,33 @@ CONTACT_TOKEN_BY_PRIM_ROOT: dict[str, str] = {
     R1_TARGET_OBJECT_PRIM_PATH: "object",
     R1_SUPPORT_PRIM_PATH: "table",
 }
+R1_CONTACT_TOKEN_BY_WATCH_ROOT: dict[str, str] = {
+    **CONTACT_TOKEN_BY_PRIM_ROOT,
+    R1_ROBOT_PRIM_PATH + "/left_arm_link1": "left_arm_link1",
+    R1_ROBOT_PRIM_PATH + "/left_arm_link2": "left_arm_link2",
+    R1_ROBOT_PRIM_PATH + "/left_arm_link3": "left_arm_link3",
+    R1_ROBOT_PRIM_PATH + "/left_arm_link4": "left_arm_link4",
+    R1_ROBOT_PRIM_PATH + "/left_arm_link5": "left_arm_link5",
+    R1_ROBOT_PRIM_PATH + "/left_arm_link6": "left_arm_link6",
+    R1_ROBOT_PRIM_PATH + "/right_arm_link1": "right_arm_link1",
+    R1_ROBOT_PRIM_PATH + "/right_arm_link2": "right_arm_link2",
+    R1_ROBOT_PRIM_PATH + "/right_arm_link3": "right_arm_link3",
+    R1_ROBOT_PRIM_PATH + "/right_arm_link4": "right_arm_link4",
+    R1_ROBOT_PRIM_PATH + "/right_arm_link5": "right_arm_link5",
+    R1_ROBOT_PRIM_PATH + "/right_arm_link6": "right_arm_link6",
+    R1_ROBOT_PRIM_PATH + "/left_gripper_link1": "left_gripper_link1",
+    R1_ROBOT_PRIM_PATH + "/left_gripper_link2": "left_gripper_link2",
+    R1_ROBOT_PRIM_PATH + "/right_gripper_link1": "right_gripper_link1",
+    R1_ROBOT_PRIM_PATH + "/right_gripper_link2": "right_gripper_link2",
+}
+
+
+class ObservationUnavailableError(RuntimeError):
+    """A real-adapter observation cannot be read from the live scene."""
+
+
+class ContactRootTokenError(ObservationUnavailableError):
+    """A tracker watch root lacks an explicitly frozen taxonomy token."""
 
 class SimAdapter(ABC):
     """Everything episode_runner needs from a simulator."""
@@ -831,7 +859,10 @@ class IsaacLabR1Adapter(SimAdapter):
         state = self._vector(self._lookup(self._data(self._object), ("root_state_w",)), 3)
         if state is not None:
             return tuple(state[:3])
-        return (scenario.object_x, scenario.object_y, scenario.object_z)
+        raise ObservationUnavailableError(
+            "T03 object pose is unavailable from the live backend or scene; "
+            "refusing ScenarioConfig/YAML pose fallback"
+        )
 
     def _read_object_velocity(self) -> tuple[float, float, float]:
         if self._r1_backend is not None:
@@ -850,128 +881,43 @@ class IsaacLabR1Adapter(SimAdapter):
         return tuple(state[7:10]) if state is not None else (0.0, 0.0, 0.0)
 
     @staticmethod
-    def _normalise_contact_name(name: Any) -> str:
-        raw = str(name).replace("\\", "/").rstrip("/")
-        for root, token in CONTACT_TOKEN_BY_PRIM_ROOT.items():
-            if raw == root or raw.startswith(root + "/"):
-                return token
-        value = raw.split("/")[-1]
-        lower = value.lower()
-        if "left_arm_link6" in lower:
-            return "left_arm_link6"
-        if "right_arm_link6" in lower:
-            return "right_arm_link6"
-        return value
+    def _contacts_from_tracker_sample(sample: ContactSample) -> set[tuple[str, str]]:
+        """Map tracker-owned roots to taxonomy tokens without parsing bodies.
 
-    @classmethod
-    def _contact_pairs(cls, value: Any) -> set[tuple[str, str]]:
-        pairs: set[tuple[str, str]] = set()
-        if value is None:
-            return pairs
-        if isinstance(value, dict):
-            for key in ("contacts", "contact_pairs", "pairs", "events"):
-                if key in value:
-                    pairs.update(cls._contact_pairs(value[key]))
-            left = next((value[key] for key in ("link_a", "body_a", "prim_a", "a", "source") if key in value), None)
-            right = next((value[key] for key in ("link_b", "body_b", "prim_b", "b", "target") if key in value), None)
-            if left is not None and right is not None:
-                pairs.add((cls._normalise_contact_name(left), cls._normalise_contact_name(right)))
-            for left_name, right_values in value.items():
-                if not isinstance(right_values, dict):
-                    continue
-                for right_name, force in right_values.items():
-                    if force is True or cls._norm(force) > 1.0e-5:
-                        pairs.add((cls._normalise_contact_name(left_name), cls._normalise_contact_name(right_name)))
-            return pairs
-        if isinstance(value, (list, tuple, set)):
-            if len(value) == 2 and all(isinstance(item, str) for item in value):
-                pairs.add((cls._normalise_contact_name(value[0]), cls._normalise_contact_name(value[1])))
-            else:
-                for item in value:
-                    pairs.update(cls._contact_pairs(item))
-        return pairs
+        Raw PhysX body paths are audit evidence only.  The tracker resolves
+        collision-proxy paths to watch roots before the adapter sees them, so
+        canonicalization can never depend on a basename such as ``mesh_0``.
+        """
 
-    def _sensor_items(self) -> list[tuple[str, Any]]:
-        items: list[tuple[str, Any]] = []
-        for owner in (self._scene, self.env):
-            sensors = self._lookup(owner, ("sensors", "contact_sensors"))
-            try:
-                items.extend((str(key), value) for key, value in sensors.items())
-            except AttributeError:
-                pass
-        return items
-
-    def _contacts_from_sensor(self, key: str, sensor: Any) -> set[tuple[str, str]]:
-        data = self._data(sensor)
-        raw = self._first(
-            self._lookup(sensor, ("contacts", "contact_pairs")),
-            self._lookup(data, ("contacts", "contact_pairs", "current_contacts", "current_contact_pairs")),
-        )
-        pairs = self._contact_pairs(raw)
-        lower = key.lower()
-        arm = "left_arm_link6" if "left" in lower else "right_arm_link6" if "right" in lower else None
-        other = next((name for name in ("table", "object", "target_ring", "cabinet") if name in lower), None)
-        in_contact = self._first(
-            self._lookup(sensor, ("in_contact", "has_contact")),
-            self._lookup(data, ("in_contact", "has_contact")),
-        )
-        if arm and other and (in_contact is True or self._norm(in_contact) > 1.0e-5):
-            pairs.add((arm, other))
-
-        # ContactSensorCfg commonly exposes only a net force.  Recover the
-        # named pair from the sensor/filter name; this is what lets the
-        # detector see exactly ("left_arm_link6", "table") rather than an
-        # engine-specific prim path.
-        net_force = self._lookup(data, ("net_forces_w", "net_force_w", "force_w"))
-        if arm and self._norm(net_force) > 1.0e-5:
-            filters = self._first(
-                self._lookup(sensor, ("filter_prim_paths", "filter_prim_paths_expr")),
-                self._lookup(self._lookup(sensor, ("cfg", "config")), ("filter_prim_paths", "filter_prim_paths_expr")),
+        if not isinstance(sample, ContactSample):
+            raise TypeError(
+                "T03 contact source must provide ContactSample with watch-root ownership"
             )
-            filter_names = filters if isinstance(filters, (list, tuple, set)) else ([filters] if filters else [])
-            candidates = {
-                self._normalise_contact_name(item)
-                for item in filter_names
-                if self._normalise_contact_name(item) != arm
-            }
-            if other:
-                candidates.add(other)
-            for candidate in candidates:
-                if candidate and candidate != arm:
-                    pairs.add((arm, candidate))
-
-        force_matrix = self._plain(self._lookup(data, ("force_matrix_w", "contact_force_matrix_w")))
-        while isinstance(force_matrix, list) and len(force_matrix) == 1 and isinstance(force_matrix[0], list):
-            force_matrix = force_matrix[0]
-        sensor_names = self._plain(self._first(
-            self._lookup(sensor, ("body_names", "link_names", "prim_names")),
-            self._lookup(data, ("body_names", "link_names", "prim_names")),
-            self._body_names(),
-        ))
-        if isinstance(force_matrix, list) and force_matrix and isinstance(force_matrix[0], list):
-            names = [str(item).replace("\\", "/").split("/")[-1] for item in (sensor_names or [])]
-            for first, row in enumerate(force_matrix):
-                if not isinstance(row, list):
-                    continue
-                for second, force in enumerate(row):
-                    if first == second or self._norm(force) <= 1.0e-5:
-                        continue
-                    if first < len(names) and second < len(names):
-                        pairs.add((self._normalise_contact_name(names[first]), self._normalise_contact_name(names[second])))
-        return pairs
+        contacts: set[tuple[str, str]] = set()
+        for watch_pairs in sample.pairs.values():
+            for pair in watch_pairs:
+                try:
+                    query_token = R1_CONTACT_TOKEN_BY_WATCH_ROOT[pair.query_root]
+                    counterpart_token = R1_CONTACT_TOKEN_BY_WATCH_ROOT[pair.counterpart_root]
+                except KeyError as exc:
+                    raise ContactRootTokenError(
+                        "T03 tracker reported an unmapped watch root: "
+                        f"{exc.args[0]!r}"
+                    ) from exc
+                contacts.add((query_token, counterpart_token))
+        return contacts
 
     def _read_contacts(self) -> set[tuple[str, str]]:
-        pairs: set[tuple[str, str]] = set()
-        called, value = self._call_first(
-            (self.env, self._scene), ("get_contacts", "read_contacts", "get_contact_pairs"), (((), {}),)
+        tracker = self._first(
+            self._lookup(self.env, ("gripper_contact_tracker",)),
+            self._lookup(self._scene, ("gripper_contact_tracker",)),
         )
-        if called:
-            pairs.update(self._contact_pairs(value))
-        for owner in (self.env, self._scene):
-            pairs.update(self._contact_pairs(self._lookup(owner, ("contacts", "contact_pairs", "physics_contacts"))))
-        for key, sensor in self._sensor_items():
-            pairs.update(self._contacts_from_sensor(key, sensor))
-        return pairs
+        if tracker is None:
+            raise ObservationUnavailableError(
+                "T03 contact tracker is not injected; refusing unowned raw-contact parsing"
+            )
+        sample = tracker.sample()
+        return self._contacts_from_tracker_sample(sample)
 
     def _read_grip_force(self, arm: str) -> float:
         if self._r1_backend is not None:
@@ -1593,7 +1539,7 @@ class MockSimAdapter(SimAdapter):
         elif an.scenario_class == "R12":
             dist = max(dist, an.object_distance_at_contact + 0.05)
             for arm in arms:
-                contacts_add.add((f"{arm}_arm_link6", "object"))
+                contacts_add.add((f"{arm}_gripper_link1", "object"))
                 extra_add[f"{arm}_grasp_alignment_error"] = 0.10
         elif an.scenario_class == "R14":
             contacts_add.add(("left_arm_link6", "right_arm_link6"))
@@ -1729,6 +1675,19 @@ class MockSimAdapter(SimAdapter):
         object_pos_override: tuple[float, float, float] | None = None,
         joint_margin_override: dict[str, float] | None = None,
     ) -> Observation:
+        # Control-flow fixture only: these explicit values keep missing-input
+        # checks testable without letting detector-level defaults turn absent
+        # data into a normal result. They are not real-physics evidence.
+        extra = {
+            "left_grasp_alignment_error": 0.0,
+            "right_grasp_alignment_error": 0.0,
+            "left_grasp_slip_m": 0.0,
+            "right_grasp_slip_m": 0.0,
+            "left_approach_stall_s": 0.0,
+            "right_approach_stall_s": 0.0,
+            "lift_stalled": False,
+            **extra,
+        }
         joint_limit_margin = {j: 1.0 for j in JOINT_ORDER}
         if joint_margin_override:
             joint_limit_margin.update(joint_margin_override)

@@ -20,12 +20,38 @@ from episode_gen.scenario import AnomalyConfig, ScenarioConfig
 from episode_gen.types import AnomalyEvent, Observation
 
 
+class MissingObservationFieldError(RuntimeError):
+    """A detector input is absent, so the episode must not be labelled normal."""
+
+
 def _arms(anomaly: AnomalyConfig) -> list[str]:
     return ["left", "right"] if anomaly.contact_arm == "both" else [anomaly.contact_arm]
 
 
 def _touching(obs: Observation, a: str, b: str) -> bool:
     return (a, b) in obs.contacts or (b, a) in obs.contacts
+
+
+def _required_extra(
+    obs: Observation, scenario_class: str, phase: Phase, key: str
+) -> object:
+    if key not in obs.extra or obs.extra[key] is None:
+        raise MissingObservationFieldError(
+            f"{scenario_class} requires Observation.extra[{key!r}] during {phase.value}; "
+            "refusing a silent normal result"
+        )
+    return obs.extra[key]
+
+
+def _required_mapping_value(
+    mapping: dict[str, object], scenario_class: str, phase: Phase, key: str
+) -> object:
+    if key not in mapping or mapping[key] is None:
+        raise MissingObservationFieldError(
+            f"{scenario_class} requires Observation field {key!r} during {phase.value}; "
+            "refusing a silent normal result"
+        )
+    return mapping[key]
 
 
 def detect_r11(scenario: ScenarioConfig, phase: Phase, obs: Observation) -> AnomalyEvent | None:
@@ -37,7 +63,9 @@ def detect_r11(scenario: ScenarioConfig, phase: Phase, obs: Observation) -> Anom
     for arm in _arms(an):
         link = f"{arm}_arm_link6"
         if _touching(obs, link, an.surface):
-            dist = obs.dist_to_grasp_frame.get(arm, 0.0)
+            dist = _required_mapping_value(
+                obs.dist_to_grasp_frame, "R11", phase, arm
+            )
             if dist > an.object_distance_at_contact:
                 return AnomalyEvent(
                     scenario_class="R11", phase=phase, t=obs.t, arm=arm,
@@ -54,9 +82,11 @@ def detect_r12(scenario: ScenarioConfig, phase: Phase, obs: Observation) -> Anom
         return None
     threshold = an.extra.get("alignment_error_threshold", 0.03)
     for arm in _arms(an):
-        link = f"{arm}_arm_link6"
-        if _touching(obs, link, "object"):
-            align_err = obs.extra.get(f"{arm}_grasp_alignment_error", 0.0)
+        finger_links = (f"{arm}_gripper_link1", f"{arm}_gripper_link2")
+        if any(_touching(obs, link, "object") for link in finger_links):
+            align_err = _required_extra(
+                obs, "R12", phase, f"{arm}_grasp_alignment_error"
+            )
             if align_err > threshold:
                 return AnomalyEvent(
                     scenario_class="R12", phase=phase, t=obs.t, arm=arm,
@@ -71,18 +101,24 @@ def detect_r13(scenario: ScenarioConfig, phase: Phase, obs: Observation) -> Anom
     an = scenario.anomaly
     if an is None or an.scenario_class != "R13" or phase != Phase.GRASP:
         return None
-    closed = obs.extra.get("gripper_closed")
-    if not closed or not all(closed.values()):
+    closed = _required_extra(obs, "R13", phase, "gripper_closed")
+    if not isinstance(closed, dict) or any(arm not in closed for arm in ("left", "right")):
+        raise MissingObservationFieldError(
+            "R13 requires Observation.extra['gripper_closed'] for both arms during GRASP"
+        )
+    if not all(bool(closed[arm]) for arm in ("left", "right")):
         return None  # still closing — nothing to judge yet
     f_min = an.extra.get("grip_force_min", 5.0)
-    left_ok = obs.grip_force.get("left", 0.0) >= f_min
-    right_ok = obs.grip_force.get("right", 0.0) >= f_min
+    left_force = _required_mapping_value(obs.grip_force, "R13", phase, "left")
+    right_force = _required_mapping_value(obs.grip_force, "R13", phase, "right")
+    left_ok = left_force >= f_min
+    right_ok = right_force >= f_min
     if left_ok != right_ok:
         failed_arm = "right" if left_ok else "left"
         return AnomalyEvent(
             scenario_class="R13", phase=phase, t=obs.t, arm=failed_arm,
-            detail={"left_grip_force": obs.grip_force.get("left", 0.0),
-                    "right_grip_force": obs.grip_force.get("right", 0.0),
+            detail={"left_grip_force": left_force,
+                    "right_grip_force": right_force,
                     "f_min": f_min},
         )
     return None
@@ -115,7 +151,7 @@ def detect_r15(scenario: ScenarioConfig, phase: Phase, obs: Observation) -> Anom
         return None
     threshold = an.extra.get("slip_threshold_m", 0.02)
     for arm in _arms(an):
-        slip = obs.extra.get(f"{arm}_grasp_slip_m", 0.0)
+        slip = _required_extra(obs, "R15", phase, f"{arm}_grasp_slip_m")
         if slip > threshold:
             return AnomalyEvent(
                 scenario_class="R15", phase=phase, t=obs.t, arm=arm,
@@ -152,7 +188,7 @@ def detect_r17(scenario: ScenarioConfig, phase: Phase, obs: Observation) -> Anom
         return None
     stall_max = an.extra.get("stall_time_s", 1.0)
     for arm in _arms(an):
-        stalled_for = obs.extra.get(f"{arm}_approach_stall_s", 0.0)
+        stalled_for = _required_extra(obs, "R17", phase, f"{arm}_approach_stall_s")
         if stalled_for >= stall_max:
             return AnomalyEvent(
                 scenario_class="R17", phase=phase, t=obs.t, arm=arm,
@@ -164,8 +200,13 @@ def detect_r17(scenario: ScenarioConfig, phase: Phase, obs: Observation) -> Anom
 def detect_r18(scenario: ScenarioConfig, phase: Phase, obs: Observation) -> AnomalyEvent | None:
     """Any joint approaching its limit, in any phase."""
     an = scenario.anomaly
-    if an is None or an.scenario_class != "R18" or not obs.joint_limit_margin:
+    if an is None or an.scenario_class != "R18":
         return None
+    if not obs.joint_limit_margin:
+        raise MissingObservationFieldError(
+            f"R18 requires Observation.joint_limit_margin during {phase.value}; "
+            "refusing a silent normal result"
+        )
     margin_min = an.extra.get("margin_min", 0.05)
     joint, margin = min(obs.joint_limit_margin.items(), key=lambda kv: kv[1])
     if margin < margin_min:
@@ -185,7 +226,8 @@ def detect_r19(scenario: ScenarioConfig, phase: Phase, obs: Observation) -> Anom
     an = scenario.anomaly
     if an is None or an.scenario_class != "R19" or phase != Phase.LIFT:
         return None
-    if obs.extra.get("lift_stalled", False):
+    lift_stalled = _required_extra(obs, "R19", phase, "lift_stalled")
+    if lift_stalled:
         return AnomalyEvent(
             scenario_class="R19", phase=phase, t=obs.t, arm=an.contact_arm,
             detail={"object_vel": obs.object_vel},

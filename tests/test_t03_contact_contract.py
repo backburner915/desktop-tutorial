@@ -7,11 +7,15 @@ from types import ModuleType, SimpleNamespace
 from unittest.mock import patch
 
 from episode_gen.sim_adapter import (
+    ContactRootTokenError,
     IsaacLabR1Adapter,
+    R1_ROBOT_PRIM_PATH,
     R1_SUPPORT_PRIM_PATH,
     R1_TARGET_OBJECT_PRIM_PATH,
 )
 from r1_bimanual_dataset.core.contact_tracker import (
+    ContactPair,
+    ContactSample,
     ContactWatchSpec,
     ContactWatchUnresolvedError,
     GripperContactTracker,
@@ -58,29 +62,71 @@ def _fake_pxr() -> dict[str, ModuleType]:
     return {"pxr": pxr}
 
 
+class _FakeContactInterface:
+    def __init__(self, contacts_by_query_path: dict[str, list[dict[str, str]]]) -> None:
+        self.contacts_by_query_path = contacts_by_query_path
+
+    def get_rigid_body_raw_data(self, query_path: str) -> list[dict[str, str]]:
+        return self.contacts_by_query_path.get(query_path, [])
+
+    @staticmethod
+    def decode_body_name(value: str) -> str:
+        return value
+
+
 class TestT03ContactContract(unittest.TestCase):
-    def test_support_and_object_are_mapped_only_by_explicit_prim_root(self) -> None:
-        self.assertEqual(IsaacLabR1Adapter._normalise_contact_name(R1_SUPPORT_PRIM_PATH), "table")
-        self.assertEqual(
-            IsaacLabR1Adapter._normalise_contact_name(R1_SUPPORT_PRIM_PATH + "/collision"),
-            "table",
+    def _sample_for_collision_proxy(
+        self, watch_name: str, query_root: str, counterpart_root: str
+    ):
+        query_proxy = query_root + "/collisions/mesh_0"
+        counterpart_proxy = counterpart_root + "/collisions/mesh_0"
+        stage = _FakeStage(
+            {query_root, query_proxy, counterpart_root, counterpart_proxy},
+            {query_proxy, counterpart_proxy},
         )
-        self.assertEqual(
-            IsaacLabR1Adapter._normalise_contact_name(R1_TARGET_OBJECT_PRIM_PATH), "object"
+        spec = ContactWatchSpec(watch_name, (query_root,), (counterpart_root,))
+        with patch.dict("sys.modules", _fake_pxr()):
+            tracker = GripperContactTracker(
+                stage, R1_ROBOT_PRIM_PATH, R1_TARGET_OBJECT_PRIM_PATH, watch_specs=(spec,)
+            )
+        tracker._interface = _FakeContactInterface(
+            {query_proxy: [{"body0": query_proxy, "body1": counterpart_proxy}]}
         )
-        self.assertEqual(
-            IsaacLabR1Adapter._normalise_contact_name(
-                R1_TARGET_OBJECT_PRIM_PATH + "/collision"
-            ),
-            "object",
+        return tracker.sample().pairs[watch_name][0]
+
+    def test_arm_collision_proxy_is_mapped_by_watch_root(self) -> None:
+        query_root = R1_ROBOT_PRIM_PATH + "/left_arm_link6"
+        pair = self._sample_for_collision_proxy("left_table", query_root, R1_SUPPORT_PRIM_PATH)
+        self.assertEqual(pair.query_root, query_root)
+        self.assertEqual(pair.counterpart_root, R1_SUPPORT_PRIM_PATH)
+        self.assertTrue(pair.query_body.endswith("/collisions/mesh_0"))
+        contacts = IsaacLabR1Adapter._contacts_from_tracker_sample(
+            ContactSample(left=False, right=False, pairs={"left_table": [pair]})
         )
-        self.assertEqual(IsaacLabR1Adapter._normalise_contact_name("/World/Elsewhere/Top"), "Top")
-        self.assertEqual(
-            IsaacLabR1Adapter._normalise_contact_name("/World/Legacy/crew_lock_bag_collision"),
-            "crew_lock_bag_collision",
+        self.assertEqual(contacts, {("left_arm_link6", "table")})
+
+    def test_finger_collision_proxy_is_mapped_by_watch_root(self) -> None:
+        query_root = R1_ROBOT_PRIM_PATH + "/right_gripper_link2"
+        pair = self._sample_for_collision_proxy("right", query_root, R1_TARGET_OBJECT_PRIM_PATH)
+        self.assertEqual(pair.query_root, query_root)
+        self.assertEqual(pair.counterpart_root, R1_TARGET_OBJECT_PRIM_PATH)
+        self.assertTrue(pair.query_body.endswith("/collisions/mesh_0"))
+        contacts = IsaacLabR1Adapter._contacts_from_tracker_sample(
+            ContactSample(left=False, right=True, pairs={"right": [pair]})
         )
-        self.assertEqual(
-            IsaacLabR1Adapter._normalise_contact_name("/World/Legacy/workbench_top"), "workbench_top")
+        self.assertEqual(contacts, {("right_gripper_link2", "object")})
+
+    def test_unmapped_watch_root_is_not_silently_tokenized(self) -> None:
+        pair = ContactPair(
+            query_body="/World/Unknown/collisions/mesh_0",
+            counterpart_body=R1_TARGET_OBJECT_PRIM_PATH + "/collisions/mesh_0",
+            query_root="/World/Unknown",
+            counterpart_root=R1_TARGET_OBJECT_PRIM_PATH,
+        )
+        with self.assertRaisesRegex(ContactRootTokenError, "unmapped watch root"):
+            IsaacLabR1Adapter._contacts_from_tracker_sample(
+                ContactSample(left=False, right=False, pairs={"unknown": [pair]})
+            )
 
     def test_t03_watch_specs_cover_target_table_and_all_arm_links(self) -> None:
         robot = "/World/R1"

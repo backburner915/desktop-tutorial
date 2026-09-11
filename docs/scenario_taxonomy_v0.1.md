@@ -56,7 +56,7 @@ N02-N10 全部用 `tests/test_n_family_sampling.py` 验证过：每个生成器�
 | ID | 异常 | 检测条件（谓词，见 `episode_gen/detectors.py`） | 恢复策略（见 `episode_gen/recovery.py`） | 首批实现 |
 |---|---|---|---|---|
 | R11 | 提前碰撞（premature_surface_contact） | phase==APPROACH 且 `contact(arm, surface)==True` 且 `dist_to_grasp_frame(arm) > d_safe` | RETREAT 到安全位 → 按 `retry_approach_angle`/`retry_grasp_offset` 重新规划 → 回 APPROACH | ✅ 优先 |
-| R12 | 接触物体错误表面（wrong_surface_contact） | phase==APPROACH/CONTACT_CHECK 且 `contact(arm, object)==True` 且 grasp 对齐误差 > 阈值 | 松开 → 后退 → 调整 `grasp_offset` → 重新 APPROACH | ✅ 优先 |
+| R12 | 接触物体错误表面（wrong_surface_contact） | phase==APPROACH/CONTACT_CHECK 且 `contact({side}_gripper_link1/link2, object)==True` 且 grasp 对齐误差 > 阈值 | 松开 → 后退 → 调整 `grasp_offset` → 重新 APPROACH | ✅ 优先 |
 | R13 | 单侧夹爪抓住（single_side_grasp） | phase==GRASP 结束时仅一侧 `grip_force(arm) > f_min` | 保持已抓侧 / 视 config 决定是否释放 → 未成功侧单独重新 APPROACH | ✅ 优先 |
 | R14 | 两臂互撞（arm_arm_collision） | 任意阶段 `contact(left_link, right_link)==True` | 双臂同时 RETREAT → 增大 `approach_offset` 后重新规划双侧轨迹 | ✅ 优先 |
 | R15 | 夹爪打滑（grip_slip） | phase==LIFT/HOLD 且 object 相对 gripper 的位移持续增长 | 降低/松开 → 回 GRASP 前重新夹紧 | ✅ 已实现 |
