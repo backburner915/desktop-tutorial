@@ -58,6 +58,15 @@ CAMERA_PRIM_PATHS: dict[str, str] = {
     "right_wrist": R1_ROBOT_PRIM_PATH + "/right_arm_link6/right_wrist_camera",
 }
 
+# Contact tokens are a task contract, not basename guesses. The taxonomy's
+# historical ``table`` token means this exact T03 support prim. Keep the
+# mapping at full prim-path granularity so an unrelated ``Top`` cannot become
+# a table contact by coincidence.
+CONTACT_TOKEN_BY_PRIM_ROOT: dict[str, str] = {
+    R1_TARGET_OBJECT_PRIM_PATH: "object",
+    R1_SUPPORT_PRIM_PATH: "table",
+}
+
 class SimAdapter(ABC):
     """Everything episode_runner needs from a simulator."""
 
@@ -842,18 +851,16 @@ class IsaacLabR1Adapter(SimAdapter):
 
     @staticmethod
     def _normalise_contact_name(name: Any) -> str:
-        value = str(name).replace("\\", "/").split("/")[-1]
+        raw = str(name).replace("\\", "/").rstrip("/")
+        for root, token in CONTACT_TOKEN_BY_PRIM_ROOT.items():
+            if raw == root or raw.startswith(root + "/"):
+                return token
+        value = raw.split("/")[-1]
         lower = value.lower()
         if "left_arm_link6" in lower:
             return "left_arm_link6"
         if "right_arm_link6" in lower:
             return "right_arm_link6"
-        if "target_ring" in lower or "green_target_ring" in lower:
-            return "target_ring"
-        if "crew_lock_bag" in lower or lower in {"bag", "object"}:
-            return "object"
-        if "table" in lower or "workbench" in lower:
-            return "table"
         return value
 
     @classmethod

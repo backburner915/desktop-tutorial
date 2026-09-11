@@ -105,3 +105,24 @@ adapter 内部包装 `NominalGraspGenerator.generate()`、`BimanualController.bu
 6. 不可取得或单位不可证明的字段，必须逐项报告为缺口，不能以默认值伪装为真实观测。
 
 本阶段不运行 batch、不生成数据集，且不以旧 `episode_000001` 为任何验证或迁移基准。
+
+## 6. 已确认的范围决策
+
+- **抓取几何：** 选项 B。既有 `IsaacLabR1Adapter` 内将复用 sim 侧
+  `NominalGraspGenerator` / `BimanualController` / `JointTrajectory`；映射须先冻结，
+  不得将旧 `failure_mode` 的预制扰动引回 N/R/F/P 流程。
+- **R12：** `grasp_alignment_error` 定义为首次确认指端接触时，真实 TCP 到名义
+  grasp frame 的平移残差（m）。目标物接触的 canonical link 改为实际 finger link，
+  不得把它伪装为 `arm_link6`。现有 tracker 不保留接触点/法线，因而它不能提供严格的
+  接触面误差。
+- **R19：** 在计划 LIFT 阶段结束时仅评估一次；沿计划 lift 轴的真实位移小于
+  `0.045 m` 即为 `lift_stalled`。该阈值继承自旧 `SuccessEvaluator` 的真实链路判据，
+  但尚未独立标定；smoke 必须保存完整 `lift_progress` 曲线并标注 `provisional`。
+- **接触仪表：** 首批选 A：扩展已经在真实 T03 运行路径中使用的
+  `GripperContactTracker`，新增 R11 support 与 R14 全 arm-link watches。选择理由是
+  在已运行的 PhysX raw-contact 路径上扩展监听范围，而不是引入本场景尚未验证的
+  `ContactSensorCfg`。`/World/TaskSetup/Fixtures/StorageRack/Top` 显式规范化为
+  taxonomy token `table`；不允许 basename 猜测。
+- **R13：** 暂时移出首批。其既定后续方案是每侧 finger collision body 与 target rigid
+  body 的 normal contact force（N）求和；当前 joint effort 不是可追溯的 N 值，
+  `grip_force_min=5.0` 保持挂起。B 方案仅保留为后续仪表选项，本轮不实施。
