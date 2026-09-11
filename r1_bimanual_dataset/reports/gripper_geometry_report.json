@@ -1,0 +1,231 @@
+{
+  "report_version": "r1-gripper-geometry-v1",
+  "source_usd_modified": false,
+  "target": {
+    "target_path": "/World/R1DatasetOverlay/TargetPose/SugarBox",
+    "asset_url": "C:\\Users\\许久轻\\Documents\\ChatGPT\\通信\\r1_bimanual_dataset\\assets\\004_sugar_box_physics.usd",
+    "asset_source_url": "https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Props/YCB/Axis_Aligned_Physics/004_sugar_box.usd",
+    "bbox_min_m": [
+      -3.7963381995334133,
+      3.7618732281355585,
+      0.5820000001490115
+    ],
+    "bbox_max_m": [
+      -3.703660870634149,
+      3.938126686033755,
+      0.627134138201159
+    ],
+    "dimensions_m": [
+      0.09267732889926439,
+      0.17625345789819669,
+      0.0451341380521475
+    ],
+    "table_top_z_m": 0.5800000001490115,
+    "bottom_clearance_m": 0.0020000000000000018
+  },
+  "base_placement": {
+    "object_center": [
+      -3.2,
+      3.85,
+      0.545
+    ],
+    "object_dimensions": [
+      1.65,
+      0.55,
+      0.07
+    ],
+    "lateral_bbox_axis": "x",
+    "base_forward_axis": "y",
+    "side": "near",
+    "stand_off_m": 0.78,
+    "base_position": [
+      -3.2,
+      3.07,
+      0.0
+    ],
+    "base_quaternion_wxyz": [
+      0.707107,
+      0.0,
+      0.0,
+      0.707107
+    ]
+  },
+  "fixed_root": "/World/garobot2_driveable_final/r1_DVT_colored",
+  "sides": {
+    "left": {
+      "gripper_joint_indices": [
+        15,
+        16
+      ],
+      "joint_lower_m": [
+        0.0,
+        0.0
+      ],
+      "joint_upper_m": [
+        0.05000000074505806,
+        0.05000000074505806
+      ],
+      "opened": {
+        "axis_target_m": 0.05000000074505806,
+        "link1_origin_m": [
+          -3.4014618396759033,
+          3.1906633377075195,
+          0.9639908075332642
+        ],
+        "link2_origin_m": [
+          -3.5018951892852783,
+          3.1173770427703857,
+          0.9390460252761841
+        ],
+        "link_origin_separation_m": 0.12680686456664972,
+        "finger_midpoint_m": [
+          -3.451678514480591,
+          3.1540201902389526,
+          0.9515184164047241
+        ],
+        "link6_position_m": [
+          -3.4546265602111816,
+          3.145900011062622,
+          0.9873826503753662
+        ],
+        "link6_quaternion_wxyz": [
+          0.11750698275154178,
+          -0.8899175665237956,
+          0.44053522448004,
+          0.012944102491692023
+        ],
+        "link6_to_midpoint_m": [
+          0.0029480457305908203,
+          0.008120179176330566,
+          -0.03586423397064209
+        ]
+      },
+      "closed": {
+        "axis_target_m": 0.0,
+        "link1_origin_m": [
+          -3.4441585540771484,
+          3.1611993312835693,
+          0.953968346118927
+        ],
+        "link2_origin_m": [
+          -3.4657890796661377,
+          3.1453423500061035,
+          0.9487270712852478
+        ],
+        "link_origin_separation_m": 0.02732754021810195,
+        "finger_midpoint_m": [
+          -3.454973816871643,
+          3.1532708406448364,
+          0.9513477087020874
+        ],
+        "link6_position_m": [
+          -3.4576404094696045,
+          3.1452412605285645,
+          0.9872545003890991
+        ],
+        "link6_quaternion_wxyz": [
+          0.11576575612927478,
+          -0.8907274425209324,
+          0.43928863635980847,
+          0.015113133794028726
+        ],
+        "link6_to_midpoint_m": [
+          0.0026665925979614258,
+          0.008029580116271973,
+          -0.03590679168701172
+        ]
+      },
+      "link_origin_travel_m": 0.09947932434854777
+    },
+    "right": {
+      "gripper_joint_indices": [
+        17,
+        18
+      ],
+      "joint_lower_m": [
+        0.0,
+        0.0
+      ],
+      "joint_upper_m": [
+        0.05000000074505806,
+        0.05000000074505806
+      ],
+      "opened": {
+        "axis_target_m": 0.05000000074505806,
+        "link1_origin_m": [
+          -2.9852044582366943,
+          3.179964303970337,
+          0.9533941149711609
+        ],
+        "link2_origin_m": [
+          -2.890249729156494,
+          3.261121988296509,
+          0.97576904296875
+        ],
+        "link_origin_separation_m": 0.12689999094869187,
+        "finger_midpoint_m": [
+          -2.9377270936965942,
+          3.220543146133423,
+          0.9645815789699554
+        ],
+        "link6_position_m": [
+          -2.9354162216186523,
+          3.20827317237854,
+          0.9992944002151489
+        ],
+        "link6_quaternion_wxyz": [
+          -0.14137374084715537,
+          0.9001837160133321,
+          -0.4001924632089018,
+          -0.09761524068556976
+        ],
+        "link6_to_midpoint_m": [
+          -0.0023108720779418945,
+          0.012269973754882812,
+          -0.03471282124519348
+        ]
+      },
+      "closed": {
+        "axis_target_m": 0.0,
+        "link1_origin_m": [
+          -2.9463717937469482,
+          3.209996223449707,
+          0.9617241024971008
+        ],
+        "link2_origin_m": [
+          -2.925637722015381,
+          3.228109359741211,
+          0.9666962027549744
+        ],
+        "link_origin_separation_m": 0.027976940823805658,
+        "finger_midpoint_m": [
+          -2.9360047578811646,
+          3.219052791595459,
+          0.9642101526260376
+        ],
+        "link6_position_m": [
+          -2.9338395595550537,
+          3.2068417072296143,
+          0.9989533424377441
+        ],
+        "link6_quaternion_wxyz": [
+          -0.14035494860643427,
+          0.9027775081202993,
+          -0.39522189563843,
+          -0.09535676400630351
+        ],
+        "link6_to_midpoint_m": [
+          -0.00216519832611084,
+          0.012211084365844727,
+          -0.03474318981170654
+        ]
+      },
+      "link_origin_travel_m": 0.09892305012488621
+    }
+  },
+  "fit_policy": {
+    "narrowest_target_dimension_m": 0.0451341380521475,
+    "status": "PENDING_COLLISION_SURFACE_CALIBRATION",
+    "reason": "joint/link-origin travel is not the same as inner finger-pad aperture"
+  }
+}

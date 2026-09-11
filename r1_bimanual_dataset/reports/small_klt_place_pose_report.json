@@ -1,0 +1,90 @@
+{
+  "report_version": "r1-small-klt-place-pose-v1",
+  "meaning": "paused carry-to-place IK gate only; not contact, place, or data",
+  "source_usd_modified": false,
+  "table_moved": false,
+  "lower_vector_m": [
+    0.0,
+    0.0,
+    -0.14
+  ],
+  "target": {
+    "target_path": "/World/R1DatasetOverlay/TargetPose/PhysicalTarget",
+    "asset_url": "D:\\Galaxea_Lab-galaxea-main\\Galaxea_Lab-galaxea-main\\source\\extensions\\omni.isaac.lab_assets\\data\\Props\\KLT_Bin\\small_KLT.usd",
+    "asset_source_url": null,
+    "bbox_min_m": [
+      -3.4224760401624614,
+      3.5766179073307884,
+      1.120999987512827
+    ],
+    "bbox_max_m": [
+      -2.9775239895735535,
+      3.8733820926692104,
+      1.3405398688374652
+    ],
+    "dimensions_m": [
+      0.44495205058890797,
+      0.29676418533842197,
+      0.2195398813246383
+    ],
+    "table_top_z_m": 1.118999987512827,
+    "bottom_clearance_m": 0.0020000000000000018
+  },
+  "sides": {
+    "left": {
+      "target_midpoint_m": [
+        -3.20247639779033,
+        3.724999999999987,
+        1.229990835863287
+      ],
+      "midpoint_m": [
+        -3.203066825866699,
+        3.7243205308914185,
+        1.2307045459747314
+      ],
+      "position_error_m": 0.0011487670373241583,
+      "gap_axis_world": [
+        -0.7560991677810899,
+        0.38793146496882946,
+        -0.5270893918187702
+      ],
+      "side_normal_alignment": 0.7560991677810899,
+      "arm_joint_target": [
+        0.7728515863418579,
+        2.9708197116851807,
+        -2.1395578384399414,
+        0.37208986282348633,
+        0.25947660207748413,
+        2.6396851539611816
+      ]
+    },
+    "right": {
+      "target_midpoint_m": [
+        -2.797524347201422,
+        3.724999999999987,
+        1.229990835863287
+      ],
+      "midpoint_m": [
+        -2.797361731529236,
+        3.723728060722351,
+        1.2313012480735779
+      ],
+      "position_error_m": 0.0018334267216645584,
+      "gap_axis_world": [
+        -0.9938862757925023,
+        -0.07465649229395722,
+        -0.08134174174230889
+      ],
+      "side_normal_alignment": 0.9938862757925023,
+      "arm_joint_target": [
+        -0.7630985379219055,
+        2.369049072265625,
+        -1.8275814056396484,
+        -1.096524953842163,
+        -0.6319029331207275,
+        1.0560336112976074
+      ]
+    }
+  },
+  "result": "PASS"
+}

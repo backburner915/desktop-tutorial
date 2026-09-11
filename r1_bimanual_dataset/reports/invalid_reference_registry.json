@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "references": [
+    {
+      "asset": "D:\\Galaxea_Lab-galaxea-main\\Galaxea_Lab-galaxea-main\\source\\extensions\\omni.isaac.lab_assets\\data\\Props\\KLT_Bin\\small_KLT.usd",
+      "status": "INVALID_ASSET_COLLISION_MISMATCH",
+      "eligible_as_default": false,
+      "dataset_allowed": false,
+      "historical_probe": "r1_bimanual_dataset/tools/run_physical_klt_reference_probe.py",
+      "audit": "reports/small_klt_physics_audit.json"
+    }
+  ],
+  "active_reference": null,
+  "dataset_generation_enabled": false,
+  "current_gate": "A"
+}

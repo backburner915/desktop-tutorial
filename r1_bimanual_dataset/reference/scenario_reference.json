@@ -1,0 +1,21 @@
+{
+  "scenario_id": 0,
+  "intended_outcome": "success",
+  "object_position": [-3.7499999999999996, 3.85, 0.6401190738379959],
+  "object_orientation": [0.0, 0.0, 0.0],
+  "left_start_pose": [0.0, 2.0, -1.57, 0.0, 1.57, 0.0],
+  "right_start_pose": [0.0, 2.0, -1.57, 0.0, -1.57, 0.0],
+  "left_grasp_offset": [0.0, 0.0, 0.0],
+  "right_grasp_offset": [0.0, 0.0, 0.0],
+  "left_approach_angle": [0.0, 0.0, 0.0],
+  "right_approach_angle": [0.0, 0.0, 0.0],
+  "pregrasp_distance": 0.1,
+  "lift_vector": [0.0, 0.0, 0.12],
+  "coordination_mode": "synchronous",
+  "phase_offset": 0.0,
+  "gripper_target": {"left": [0.0, 0.0], "right": [0.0, 0.0]},
+  "failure_mode": "none",
+  "failure_magnitude": 0.0,
+  "seed": 0,
+  "target_object": "/World/TaskSetup/MovablePayloads/T01"
+}

@@ -1,0 +1,30 @@
+{
+  "scenario_id": 910000,
+  "intended_outcome": "success",
+  "object_position": [-3.2, 3.725, 1.22999],
+  "object_orientation": [0.0, 0.0, 1.57079632679],
+  "left_start_pose": [0.7646378, 2.578882, -1.931721, 0.4002457, 0.2984866, -0.57596],
+  "right_start_pose": [-0.7718539, 2.586871, -1.750329, -1.129027, -0.5907242, -1.87187],
+  "left_grasp_offset": [0.0, 0.0, 0.0],
+  "right_grasp_offset": [0.0, 0.0, 0.0],
+  "left_approach_angle": [0.0, 0.0, 0.0],
+  "right_approach_angle": [0.0, 0.0, 0.0],
+  "pregrasp_distance": 0.0,
+  "lift_vector": [0.0, 0.0, 0.14],
+  "carry_vector": [0.2, 0.0, 0.0],
+  "coordination_mode": "synchronous",
+  "phase_offset": 0.0,
+  "gripper_target": {"left": [0.0, 0.0], "right": [0.0, 0.0]},
+  "failure_mode": "none",
+  "failure_magnitude": 0.0,
+  "seed": 910000,
+  "behavior_template": "physical_klt_transport_v1",
+  "instruction": "Grasp the object with both hands, lift it, carry it to the target position, place it down, and release it.",
+  "metadata": {
+    "target_asset": "Isaac Lab SmallKLT, uniform scale 1.5",
+    "target_asset_path": "D:/Galaxea_Lab-galaxea-main/Galaxea_Lab-galaxea-main/source/extensions/omni.isaac.lab_assets/data/Props/KLT_Bin/small_KLT.usd",
+    "target_platform": {"center_xy": [-3.1, 3.725], "dimensions_m": [0.8, 0.298, 0.539]},
+    "fixed_base": {"side": "near", "stand_off_m": 0.58},
+    "reference_gate_report": "reports/small_klt_reference_probe_report.json"
+  }
+}
