@@ -26,6 +26,14 @@ class ContactWatchSpec:
     counterpart_roots: tuple[str, ...]
 
 
+class ContactWatchUnresolvedError(RuntimeError):
+    """A required T03 raw-contact watch cannot observe live collision geometry.
+
+    This is deliberately fatal during bootstrap: a watch that resolves to no
+    collision geometry must never degrade into an empty contact stream.
+    """
+
+
 @dataclass(frozen=True)
 class ContactSample:
     left: bool
@@ -102,10 +110,30 @@ class GripperContactTracker:
         if len(names) != len(set(names)):
             raise ValueError(f"contact watch names must be unique: {names}")
         self.watch_specs = watch_specs
-        self._query_paths = {
-            spec.name: self._expand_query_paths(spec.query_roots, spec.name)
-            for spec in self.watch_specs
-        }
+        self._watch_resolution: dict[str, dict[str, object]] = {}
+        self._query_paths: dict[str, list[str]] = {}
+        self._counterpart_collision_paths: dict[str, list[str]] = {}
+        for spec in self.watch_specs:
+            query_collision_paths = self._resolve_collision_paths(
+                spec.query_roots, spec.name, "query"
+            )
+            counterpart_collision_paths = self._resolve_collision_paths(
+                spec.counterpart_roots, spec.name, "counterpart"
+            )
+            # Query both the link root and every collision child. This retains
+            # the legacy raw-data behavior while proving that each root owns
+            # actual collision geometry before the watch is considered live.
+            self._query_paths[spec.name] = sorted(
+                set(spec.query_roots).union(query_collision_paths)
+            )
+            self._counterpart_collision_paths[spec.name] = counterpart_collision_paths
+            self._watch_resolution[spec.name] = {
+                "status": "RESOLVED",
+                "query_roots": list(spec.query_roots),
+                "query_collision_paths": query_collision_paths,
+                "counterpart_roots": list(spec.counterpart_roots),
+                "counterpart_collision_paths": counterpart_collision_paths,
+            }
         self._interface = None
 
     @staticmethod
@@ -113,14 +141,32 @@ class GripperContactTracker:
         root = root.rstrip("/")
         return path == root or path.startswith(root + "/")
 
-    def _expand_query_paths(self, roots: tuple[str, ...], watch_name: str) -> list[str]:
+    def _resolve_collision_paths(
+        self, roots: tuple[str, ...], watch_name: str, role: str
+    ) -> list[str]:
+        """Resolve collision geometry or report this watch explicitly invalid."""
+
         paths: set[str] = set()
         for root in roots:
             root = root.rstrip("/")
             prim = self.stage.GetPrimAtPath(root)
             if not prim or not prim.IsValid():
-                raise RuntimeError(f"contact-watch root is missing ({watch_name}): {root}")
-            paths.add(root)
+                self._watch_resolution[watch_name] = {
+                    "status": "UNRESOLVED",
+                    "role": role,
+                    "root": root,
+                    "reason": "prim_missing",
+                }
+                raise ContactWatchUnresolvedError(
+                    f"UNRESOLVED contact watch '{watch_name}': {role} prim is missing: {root}"
+                )
+            root_paths: set[str] = set()
+            if (
+                prim.HasAPI(self._usd_physics.CollisionAPI)
+                or "PhysicsCollisionProxy" in root
+                or "/collisions" in root
+            ):
+                root_paths.add(root)
             for child in self.stage.Traverse():
                 path = str(child.GetPath())
                 if self._under(path, root) and (
@@ -128,30 +174,38 @@ class GripperContactTracker:
                     or "PhysicsCollisionProxy" in path
                     or "/collisions" in path
                 ):
-                    paths.add(path)
+                    root_paths.add(path)
+            if not root_paths:
+                self._watch_resolution[watch_name] = {
+                    "status": "UNRESOLVED",
+                    "role": role,
+                    "root": root,
+                    "reason": "collision_missing",
+                }
+                raise ContactWatchUnresolvedError(
+                    f"UNRESOLVED contact watch '{watch_name}': {role} prim has no collision geometry: {root}"
+                )
+            paths.update(root_paths)
         return sorted(paths)
+
+    @property
+    def watch_resolution(self) -> dict[str, dict[str, object]]:
+        """Resolved paths for bootstrap assertions and smoke-record evidence."""
+
+        return {
+            name: {
+                key: list(value) if isinstance(value, list) else value
+                for key, value in report.items()
+            }
+            for name, report in self._watch_resolution.items()
+        }
 
     def _report_paths(self) -> list[str]:
         """Bodies/proxies that need PhysX contact reporting for every watch."""
 
         paths = {path for watched in self._query_paths.values() for path in watched}
-        for spec in self.watch_specs:
-            for root in spec.counterpart_roots:
-                root = root.rstrip("/")
-                prim = self.stage.GetPrimAtPath(root)
-                if not prim or not prim.IsValid():
-                    raise RuntimeError(
-                        f"contact-watch counterpart is missing ({spec.name}): {root}"
-                    )
-                for child in self.stage.Traverse():
-                    path = str(child.GetPath())
-                    if self._under(path, root) and (
-                        child.HasAPI(self._usd_physics.RigidBodyAPI)
-                        or child.HasAPI(self._usd_physics.CollisionAPI)
-                        or "PhysicsCollisionProxy" in path
-                        or "/collisions" in path
-                    ):
-                        paths.add(path)
+        for watched in self._counterpart_collision_paths.values():
+            paths.update(watched)
         return sorted(paths)
 
     def prepare(self) -> None:

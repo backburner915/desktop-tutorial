@@ -126,3 +126,27 @@ adapter 内部包装 `NominalGraspGenerator.generate()`、`BimanualController.bu
 - **R13：** 暂时移出首批。其既定后续方案是每侧 finger collision body 与 target rigid
   body 的 normal contact force（N）求和；当前 joint effort 不是可追溯的 N 值，
   `grip_force_min=5.0` 保持挂起。B 方案仅保留为后续仪表选项，本轮不实施。
+
+## 7. Contact watch 的冻结与后续 bootstrap 验收
+
+`GripperContactTracker` 的 T03 watch-spec 不是按命名约定的“尽力监听”。构造时，每个
+query root 和 counterpart root 都必须解析到实际 collision geometry；缺 prim 或无
+collision geometry 时，tracker 必须以 `UNRESOLVED` 明确报错，不能初始化为空监听。
+实际带 collision 的 `left_arm_*` / `right_arm_*` 清单仍须在真实 smoke 中记录；在此
+之前，`link1`–`link6` 仅是已冻结的候选路径，不是已经验证的场景事实。
+
+本阶段第 3 步的 bootstrap 必须：
+
+1. 用 `t03_contact_watch_specs(robot_path, target_path, R1_SUPPORT_PRIM_PATH)` 传入
+   `GripperContactTracker(..., watch_specs=...)`；不得照抄 `physical_scene.py` 和旧
+   `run_aligned_t03_batch.py` 的三参数 legacy 构造。
+2. 在开始物理步进前断言 watch 名恰为 `left`、`right`、`left_table`、`right_table`、
+   `arm_arm`，并断言每一项 `watch_resolution[...]["status"] == "RESOLVED"`。
+3. 将完整 `watch_resolution`（含每个 root 的 collision path）及每步 raw-contact
+   pair 写入那一次 smoke 原始记录；任何 `UNRESOLVED` 终止 smoke，而不是产生零接触。
+
+显式 canonical 映射固定为
+`/World/TaskSetup/MovablePayloads/T03 → object` 和
+`/World/TaskSetup/Fixtures/StorageRack/Top → table`。其中 `table` 是历史 taxonomy token，
+实际指向 `StorageRack/Top`；不得用 basename、`target_ring`、`crew_lock_bag` 或
+`workbench` 推断 token。
