@@ -1686,6 +1686,7 @@ class MockSimAdapter(SimAdapter):
             "left_approach_stall_s": 0.0,
             "right_approach_stall_s": 0.0,
             "lift_stalled": False,
+            "phase_complete": True,
             **extra,
         }
         joint_limit_margin = {j: 1.0 for j in JOINT_ORDER}

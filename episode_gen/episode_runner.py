@@ -15,12 +15,38 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from episode_gen.detectors import run_detectors, run_secondary_detector
+from episode_gen.detectors import (
+    MissingObservationFieldError,
+    run_detectors,
+    run_secondary_detector,
+)
 from episode_gen.dataset_writer import EpisodeResult, EpisodeWriter
 from episode_gen.fsm import NOMINAL_NEXT, TERMINAL_PHASES, Phase
 from episode_gen.recovery import RecoveryManager
 from episode_gen.scenario import ScenarioConfig
 from episode_gen.sim_adapter import SimAdapter
+from episode_gen.types import Observation
+
+
+def _phase_complete(obs: Observation, phase: Phase) -> bool:
+    if obs.extra.get("phase_complete") is None:
+        raise MissingObservationFieldError(
+            f"adapter must report Observation.extra['phase_complete'] during {phase.value}; "
+            "refusing to advance the phase on an assumed default"
+        )
+    return bool(obs.extra["phase_complete"])
+
+
+def _side_contact(contacts: set[tuple[str, str]], side: str) -> bool:
+    """True when either body of any pair belongs to this side's arm or gripper.
+
+    Both members are inspected because a pair's order follows the contact
+    watch direction, and gripper links count because R12's canonical grasp
+    contact is a finger link, not ``{side}_arm_link6``.
+    """
+
+    prefixes = (f"{side}_arm", f"{side}_gripper")
+    return any(name.startswith(prefixes) for pair in contacts for name in pair)
 
 
 @dataclass
@@ -79,10 +105,10 @@ class EpisodeRunner:
                     "contacts": sorted(obs.contacts),
                     "object_pose": obs.object_pos,
                     "object_velocity": obs.object_vel,
-                    "left_contact": any(c[0].startswith("left_arm") for c in obs.contacts),
-                    "right_contact": any(c[0].startswith("right_arm") for c in obs.contacts),
-                    "left_grasp_error": obs.extra.get("left_grasp_alignment_error", 0.0),
-                    "right_grasp_error": obs.extra.get("right_grasp_alignment_error", 0.0),
+                    "left_contact": _side_contact(obs.contacts, "left"),
+                    "right_contact": _side_contact(obs.contacts, "right"),
+                    "left_grasp_error": obs.extra.get("left_grasp_alignment_error"),
+                    "right_grasp_error": obs.extra.get("right_grasp_alignment_error"),
                     "recovery_count": recovery_mgr.recovery_count,
                     "config": scenario.to_dict(),
                     "seed": scenario.seed,
@@ -123,19 +149,22 @@ class EpisodeRunner:
                     resume_after_retreat = action_result.resume_phase
                     continue
 
-            if phase == Phase.RETREAT:
-                phase = resume_after_retreat
-                phase_log.append(phase.value)
-                continue
-
             if phase == Phase.RELEASE:
                 if self.adapter.check_place_success(obs, scenario):
                     phase = Phase.SUCCESS
                     phase_log.append(phase.value)
                 continue
 
-            if obs.extra.get("phase_complete", True):
-                phase = NOMINAL_NEXT.get(phase, Phase.FAILURE)
+            if _phase_complete(obs, phase):
+                # RETREAT has to finish under real physics before the retry
+                # resumes: cutting it after one control step leaves the arm at
+                # the very pose that triggered the anomaly, so the retry
+                # re-triggers it and every R-family run exhausts recovery.
+                phase = (
+                    resume_after_retreat
+                    if phase == Phase.RETREAT
+                    else NOMINAL_NEXT.get(phase, Phase.FAILURE)
+                )
                 phase_log.append(phase.value)
 
         if phase not in TERMINAL_PHASES:
